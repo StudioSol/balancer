@@ -1,4 +1,4 @@
-Balancer
+Balancer [![Build Status](https://drone.io/github.com/StudioSol/balancer/status.png)](https://drone.io/github.com/StudioSol/balancer/latest)
 ========
 
 MySql Load Balancer
