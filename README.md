@@ -6,23 +6,26 @@ MySql Load Balancer
 
 #### Usage
 
-```GOLANG
+```GO
 package main
 
 import (
     "fmt"
-    "github.com/StudioSol/Balancer"
+    "github.com/StudioSol/balancer"
 )
 
 func main() {
     config := balancer.Config{
         CheckInterval: 3,
         StartCheck:    false,
-        TraceOne:      false,
+        TraceOn:       false,
+        Logger:        nil,
         Addresses:     []balancer.Address{
             balancer.Address{
-                Name:       "master",
-                ConnString: "user:pass@tcp(127.0.0.1:3306)/database",
+                Name:         "master",
+                ConnString:   "user:pass@tcp(127.0.0.1:3306)/database",
+                MaxIdleConns: 0,
+                MaxOpenConns: 0,
             }
         }
     }
