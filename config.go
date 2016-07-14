@@ -1,20 +1,18 @@
 package balancer
 
-import "log"
+import "github.com/go-gorp/gorp"
 
-// Config ...
 type Config struct {
 	CheckInterval int64
 	StartCheck    bool
 	TraceOn       bool
-	Logger        *log.Logger
+	Logger        gorp.GorpLogger
 	Addresses     []Address
 }
 
-// Address ...
 type Address struct {
 	Name         string
-	ConnString   string
-	MaxIdleConns int
-	MaxOpenConns int
+	ConnString   string `yaml:"conn_string"`
+	MaxIdleConns int    `yaml:"max_idle_conns"`
+	MaxOpenConns int    `yaml:"max_open_conns"`
 }

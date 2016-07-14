@@ -62,8 +62,8 @@ func (s *Server) rawQuery(query string) (map[string]string, error) {
 		return nil, sql.ErrNoRows
 	}
 	defer func() {
-		if err := rows.Close(); err != nil && s.config.Logger != nil {
-			s.config.Logger.Println(err)
+		if err := rows.Close(); err != nil {
+			s.config.Logger.Printf(err.Error())
 		}
 	}()
 
