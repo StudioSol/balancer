@@ -1,4 +1,4 @@
-Balancer [![Build Status](https://drone.io/github.com/StudioSol/balancer/status.png)](https://drone.io/github.com/StudioSol/balancer/latest)
+Balancer [![Build Status](https://drone.io/github.com/StudioSol/balancer/status.png)](https://drone.io/github.com/StudioSol/balancer/latest) [![GoDoc](https://godoc.org/github.com/StudioSol/balancer?status.svg)](https://godoc.org/github.com/StudioSol/balancer) [![Go Report Card](https://goreportcard.com/badge/github.com/StudioSol/balancer)](https://goreportcard.com/report/github.com/StudioSol/balancer)
 ========
 
 MySql Load Balancer
@@ -11,18 +11,26 @@ package main
 
 import (
     "fmt"
+    "log"
+
     "github.com/StudioSol/balancer"
 )
 
 func main() {
     config := balancer.Config{
         CheckInterval: 3,
-        StartCheck:    false,
+        StartCheck:    true,
         TraceOn:       false,
-        Logger:        nil,
+        Logger:        log,
         Addresses:     []balancer.Address{
             balancer.Address{
-                Name:         "master",
+                Name:         "slave 1",
+                ConnString:   "user:pass@tcp(127.0.0.1:3306)/database",
+                MaxIdleConns: 0,
+                MaxOpenConns: 10,
+            },
+            balancer.Address{
+                Name:         "slaves 2",
                 ConnString:   "user:pass@tcp(127.0.0.1:3306)/database",
                 MaxIdleConns: 0,
                 MaxOpenConns: 0,
