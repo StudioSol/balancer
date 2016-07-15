@@ -84,11 +84,11 @@ func (b *Balancer) PickServer() *Server {
 
 // New creates a new instance of Balancer
 func New(config *Config) *Balancer {
-	servers := make(Servers, len(config.Addresses))
-	for i, address := range config.Addresses {
+	servers := make(Servers, len(config.ServersSettings))
+	for i, serverSettings := range config.ServersSettings {
 		servers[i] = &Server{
-			name:    address.Name,
-			address: address,
+			name:            serverSettings.Name,
+			serversSettings: serverSettings,
 			health: &ServerHealth{
 				up:         false,
 				err:        nil,

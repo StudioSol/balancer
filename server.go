@@ -8,11 +8,11 @@ import (
 )
 
 type Server struct {
-	name       string
-	address    Address
-	health     *ServerHealth
-	connection *gorp.DbMap
-	config     *Config
+	name            string
+	serversSettings ServerSettings
+	health          *ServerHealth
+	connection      *gorp.DbMap
+	config          *Config
 }
 
 func (s *Server) GetName() string {
@@ -29,13 +29,13 @@ func (s *Server) GetConnection() *gorp.DbMap {
 
 func (s *Server) connectIfNecessary() error {
 	if s.connection == nil {
-		conn, err := sql.Open("mysql", s.address.ConnString)
+		conn, err := sql.Open("mysql", s.serversSettings.DSN)
 		if err != nil {
 			return err
 		}
 
-		conn.SetMaxIdleConns(s.address.MaxIdleConns)
-		conn.SetMaxOpenConns(s.address.MaxOpenConns)
+		conn.SetMaxIdleConns(s.serversSettings.MaxIdleConns)
+		conn.SetMaxOpenConns(s.serversSettings.MaxOpenConns)
 
 		if err := conn.Ping(); err != nil {
 			return err
