@@ -27,6 +27,8 @@ func (a byOpenConnections) Less(i, j int) bool {
 type Balancer struct {
 	config  *Config
 	servers Servers
+	logger  Logger
+	traceOn bool
 }
 
 // GetServers ...
@@ -47,14 +49,14 @@ func (b *Balancer) serversUP() Servers {
 
 func (b *Balancer) startChecks() {
 	for i := range b.servers {
-		b.servers[i].CheckHealth()
+		b.servers[i].CheckHealth(b.traceOn, b.logger)
 	}
 	if b.config.CheckInterval == 0 {
 		b.config.CheckInterval = 3
 	}
 	concurrence.Every(time.Duration(b.config.CheckInterval)*time.Second, func(time.Time) bool {
 		b.servers.eachASYNC(func(index int, server *Server) {
-			server.CheckHealth()
+			server.CheckHealth(b.traceOn, b.logger)
 		})
 		return true
 	})
@@ -84,23 +86,24 @@ func (b *Balancer) PickServer() *Server {
 
 // New creates a new instance of Balancer
 func New(config *Config) *Balancer {
-	servers := make(Servers, len(config.Addresses))
-	for i, address := range config.Addresses {
+	servers := make(Servers, len(config.ServersSettings))
+	for i, serverSettings := range config.ServersSettings {
 		servers[i] = &Server{
-			name:    address.Name,
-			address: address,
+			name:           serverSettings.Name,
+			serverSettings: serverSettings,
 			health: &ServerHealth{
 				up:         false,
 				err:        nil,
 				lastUpdate: time.Now(),
 			},
-			config: config,
 		}
 	}
 
 	balancer := &Balancer{
 		config:  config,
 		servers: servers,
+		logger:  config.Logger,
+		traceOn: config.TraceOn,
 	}
 
 	if config.StartCheck {
@@ -108,4 +111,10 @@ func New(config *Config) *Balancer {
 	}
 
 	return balancer
+}
+
+type Logger interface {
+	Error(args ...interface{})
+	Errorf(format string, args ...interface{})
+	Printf(format string, v ...interface{})
 }

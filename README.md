@@ -22,16 +22,16 @@ func main() {
         StartCheck:    true,
         TraceOn:       false,
         Logger:        log,
-        Addresses:     []balancer.Address{
-            balancer.Address{
+        ServersSettings:     []balancer.ServerSettings{
+            balancer.ServerSettings{
                 Name:         "slave 1",
-                ConnString:   "user:pass@tcp(127.0.0.1:3306)/database",
+                DSN:          "user:pass@tcp(127.0.0.1:3306)/database",
                 MaxIdleConns: 0,
                 MaxOpenConns: 10,
             },
-            balancer.Address{
+            balancer.ServerSettings{
                 Name:         "slaves 2",
-                ConnString:   "user:pass@tcp(127.0.0.1:3306)/database",
+                DSN:          "user:pass@tcp(127.0.0.1:3306)/database",
                 MaxIdleConns: 0,
                 MaxOpenConns: 0,
             }

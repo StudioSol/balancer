@@ -27,7 +27,6 @@ func TestBalancer(t *testing.T) {
 					openConnections:     1,
 					lastUpdate:          time.Now(),
 				},
-				config: defaultConfig,
 			})
 
 			balancer := &Balancer{config: defaultConfig, servers: servers}
@@ -44,7 +43,6 @@ func TestBalancer(t *testing.T) {
 					openConnections:     1,
 					lastUpdate:          time.Now(),
 				},
-				config: defaultConfig,
 			})
 
 			balancer := &Balancer{config: defaultConfig, servers: servers}
@@ -64,7 +62,6 @@ func TestBalancer(t *testing.T) {
 					openConnections:     0,
 					lastUpdate:          time.Now(),
 				},
-				config: defaultConfig,
 			})
 			servers = append(servers, &Server{
 				name: "myserver1",
@@ -75,7 +72,6 @@ func TestBalancer(t *testing.T) {
 					openConnections:     0,
 					lastUpdate:          time.Now(),
 				},
-				config: defaultConfig,
 			})
 			servers = append(servers, &Server{
 				name: "myserver2",
@@ -86,7 +82,6 @@ func TestBalancer(t *testing.T) {
 					openConnections:     0,
 					lastUpdate:          time.Now(),
 				},
-				config: defaultConfig,
 			})
 
 			balancer := &Balancer{config: defaultConfig, servers: servers}
@@ -105,7 +100,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     0,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers1 = append(servers1, &Server{
 					name: "myserver1",
@@ -116,7 +110,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers1 = append(servers1, &Server{
 					name: "myserver2",
@@ -127,7 +120,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     1,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 
 				balancer1 := &Balancer{config: defaultConfig, servers: servers1}
@@ -143,7 +135,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     0,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers3 = append(servers3, &Server{
 					name: "myserver1",
@@ -154,7 +145,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers3 = append(servers3, &Server{
 					name: "myserver2",
@@ -165,7 +155,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     1,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 
 				balancer3 := &Balancer{config: defaultConfig, servers: servers3}
@@ -181,7 +170,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     0,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers2 = append(servers2, &Server{
 					name: "myserver1",
@@ -192,7 +180,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers2 = append(servers2, &Server{
 					name: "myserver2",
@@ -203,7 +190,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 
 				balancer2 := &Balancer{config: defaultConfig, servers: servers2}
@@ -219,7 +205,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     0,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers4 = append(servers4, &Server{
 					name: "myserver1",
@@ -230,7 +215,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers4 = append(servers4, &Server{
 					name: "myserver2",
@@ -241,7 +225,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 
 				balancer4 := &Balancer{config: defaultConfig, servers: servers4}
@@ -257,7 +240,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers5 = append(servers5, &Server{
 					name: "myserver1",
@@ -268,7 +250,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     1,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers5 = append(servers5, &Server{
 					name: "myserver2",
@@ -279,7 +260,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     0,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 
 				balancer5 := &Balancer{config: defaultConfig, servers: servers5}
@@ -295,7 +275,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers6 = append(servers6, &Server{
 					name: "myserver1",
@@ -306,7 +285,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     999,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers6 = append(servers6, &Server{
 					name: "myserver2",
@@ -317,7 +295,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     0,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 
 				balancer6 := &Balancer{config: defaultConfig, servers: servers6}
@@ -333,7 +310,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     10,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers7 = append(servers7, &Server{
 					name: "myserver1",
@@ -344,7 +320,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     999,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 				servers7 = append(servers7, &Server{
 					name: "myserver2",
@@ -355,7 +330,6 @@ func TestBalancer(t *testing.T) {
 						openConnections:     0,
 						lastUpdate:          time.Now(),
 					},
-					config: defaultConfig,
 				})
 
 				balancer7 := &Balancer{config: defaultConfig, servers: servers7}

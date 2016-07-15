@@ -8,11 +8,11 @@ import (
 )
 
 type Server struct {
-	name       string
-	address    Address
-	health     *ServerHealth
-	connection *gorp.DbMap
-	config     *Config
+	name           string
+	health         *ServerHealth
+	serverSettings ServerSettings
+	connection     *gorp.DbMap
+	traceOn        bool
 }
 
 func (s *Server) GetName() string {
@@ -27,15 +27,15 @@ func (s *Server) GetConnection() *gorp.DbMap {
 	return s.connection
 }
 
-func (s *Server) connectIfNecessary() error {
+func (s *Server) connectIfNecessary(traceOn bool, logger Logger) error {
 	if s.connection == nil {
-		conn, err := sql.Open("mysql", s.address.ConnString)
+		conn, err := sql.Open("mysql", s.serverSettings.DSN)
 		if err != nil {
 			return err
 		}
 
-		conn.SetMaxIdleConns(s.address.MaxIdleConns)
-		conn.SetMaxOpenConns(s.address.MaxOpenConns)
+		conn.SetMaxIdleConns(s.serverSettings.MaxIdleConns)
+		conn.SetMaxOpenConns(s.serverSettings.MaxOpenConns)
 
 		if err := conn.Ping(); err != nil {
 			return err
@@ -46,14 +46,14 @@ func (s *Server) connectIfNecessary() error {
 			Dialect: gorp.MySQLDialect{},
 		}
 
-		if s.config.TraceOn {
-			s.connection.TraceOn("[sql]", s.config.Logger)
+		if traceOn && logger != nil {
+			s.connection.TraceOn("[sql]", logger)
 		}
 	}
 	return nil
 }
 
-func (s *Server) rawQuery(query string) (map[string]string, error) {
+func (s *Server) rawQuery(query string, logger Logger) (map[string]string, error) {
 	rows, err := s.connection.Db.Query(query)
 	if err != nil {
 		return nil, err
@@ -62,8 +62,8 @@ func (s *Server) rawQuery(query string) (map[string]string, error) {
 		return nil, sql.ErrNoRows
 	}
 	defer func() {
-		if err := rows.Close(); err != nil {
-			s.config.Logger.Printf(err.Error())
+		if err := rows.Close(); err != nil && logger != nil {
+			logger.Error(err)
 		}
 	}()
 
@@ -92,13 +92,13 @@ func (s *Server) rawQuery(query string) (map[string]string, error) {
 	return result, nil
 }
 
-func (s *Server) CheckHealth() {
-	if err := s.connectIfNecessary(); err != nil {
+func (s *Server) CheckHealth(traceOn bool, logger Logger) {
+	if err := s.connectIfNecessary(traceOn, logger); err != nil {
 		s.health.setDown(err)
 		return
 	}
 
-	if slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS"); err == nil {
+	if slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger); err == nil {
 		secondsBehindMaster := slaveStatusResult["Seconds_Behind_Master"]
 		if secondsBehindMaster != "" && secondsBehindMaster != "NULL" {
 			if v, err := strconv.Atoi(secondsBehindMaster); err == nil {
@@ -109,7 +109,7 @@ func (s *Server) CheckHealth() {
 		}
 	}
 
-	threadsConnectedResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_connected'")
+	threadsConnectedResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_connected'", logger)
 	if err != nil {
 		s.health.setDown(err)
 		return
