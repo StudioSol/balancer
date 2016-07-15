@@ -9,7 +9,7 @@ import (
 
 type Server struct {
 	name       string
-	address    Address
+	dsns       DSN
 	health     *ServerHealth
 	connection *gorp.DbMap
 	config     *Config
@@ -29,13 +29,13 @@ func (s *Server) GetConnection() *gorp.DbMap {
 
 func (s *Server) connectIfNecessary() error {
 	if s.connection == nil {
-		conn, err := sql.Open("mysql", s.address.ConnString)
+		conn, err := sql.Open("mysql", s.dsns.ConnString)
 		if err != nil {
 			return err
 		}
 
-		conn.SetMaxIdleConns(s.address.MaxIdleConns)
-		conn.SetMaxOpenConns(s.address.MaxOpenConns)
+		conn.SetMaxIdleConns(s.dsns.MaxIdleConns)
+		conn.SetMaxOpenConns(s.dsns.MaxOpenConns)
 
 		if err := conn.Ping(); err != nil {
 			return err
