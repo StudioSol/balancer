@@ -7,12 +7,12 @@ type Config struct {
 	StartCheck    bool
 	TraceOn       bool
 	Logger        gorp.GorpLogger
-	Addresses     []Address
+	DSNs          []DSN
 }
 
-type Address struct {
+type DSN struct {
 	Name         string
-	ConnString   string `yaml:"conn_string"`
-	MaxIdleConns int    `yaml:"max_idle_conns"`
-	MaxOpenConns int    `yaml:"max_open_conns"`
+	ConnString   string
+	MaxIdleConns int
+	MaxOpenConns int
 }
