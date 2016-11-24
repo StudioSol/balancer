@@ -2,7 +2,9 @@ package balancer
 
 import (
 	"database/sql"
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/go-gorp/gorp"
 )
@@ -93,37 +95,65 @@ func (s *Server) rawQuery(query string, logger Logger) (map[string]string, error
 }
 
 func (s *Server) CheckHealth(traceOn bool, logger Logger) {
+	var secondsBehindMaster, openConnections *int
+
 	if err := s.connectIfNecessary(traceOn, logger); err != nil {
-		s.health.setDown(err)
+		s.health.setDown(
+			fmt.Errorf("error acquiring MySQL connection: %s", err),
+			secondsBehindMaster, openConnections,
+		)
 		return
 	}
 
-	if slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger); err == nil {
-		secondsBehindMaster := slaveStatusResult["Seconds_Behind_Master"]
-		if secondsBehindMaster != "" && secondsBehindMaster != "NULL" {
-			if v, err := strconv.Atoi(secondsBehindMaster); err == nil {
-				s.health.mutex.Lock()
-				s.health.secondsBehindMaster = &v
-				s.health.mutex.Unlock()
-			}
-		}
+	slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger)
+	if err != nil {
+		s.health.setDown(
+			fmt.Errorf("failed acquiring MySQL slave status: %s", err),
+			secondsBehindMaster, openConnections,
+		)
+		return
 	}
+
+	rawSecondsBehindMaster := strings.TrimSpace(slaveStatusResult["Seconds_Behind_Master"])
+	if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
+		s.health.setDown(
+			fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
+			secondsBehindMaster, openConnections,
+		)
+		return
+	}
+
+	tmp, err := strconv.Atoi(rawSecondsBehindMaster)
+	if err != nil {
+		s.health.setDown(
+			fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
+			secondsBehindMaster, openConnections,
+		)
+		return
+	}
+
+	secondsBehindMaster = &tmp
 
 	threadsConnectedResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_connected'", logger)
 	if err != nil {
-		s.health.setDown(err)
+		s.health.setDown(
+			fmt.Errorf("failed acquiring MySQL thread status:  %s", err),
+			secondsBehindMaster, openConnections,
+		)
 		return
 	}
 
 	threadsConnected := threadsConnectedResult["Value"]
-	v, err := strconv.Atoi(threadsConnected)
+	tmp2, err := strconv.Atoi(threadsConnected)
 	if err != nil {
-		s.health.setDown(err)
+		s.health.setDown(
+			fmt.Errorf("unexpected value for Threads_connected returned from MySQL:  %s", err),
+			secondsBehindMaster, openConnections,
+		)
 		return
 	}
 
-	s.health.mutex.Lock()
-	s.health.openConnections = v
-	s.health.mutex.Unlock()
-	s.health.setUP()
+	openConnections = &tmp2
+
+	s.health.setUP(secondsBehindMaster, openConnections)
 }
