@@ -12,6 +12,12 @@ type bySecondsBehindMaster Servers
 func (a bySecondsBehindMaster) Len() int      { return len(a) }
 func (a bySecondsBehindMaster) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a bySecondsBehindMaster) Less(i, j int) bool {
+	if a[i].health.secondsBehindMaster == nil && a[j].health.secondsBehindMaster != nil {
+		return false
+	}
+	if a[i].health.secondsBehindMaster != nil && a[j].health.secondsBehindMaster == nil {
+		return true
+	}
 	return *a[i].health.secondsBehindMaster < *a[j].health.secondsBehindMaster
 }
 
@@ -20,7 +26,13 @@ type byOpenConnections Servers
 func (a byOpenConnections) Len() int      { return len(a) }
 func (a byOpenConnections) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a byOpenConnections) Less(i, j int) bool {
-	return a[i].health.openConnections < a[j].health.openConnections
+	if a[i].health.openConnections == nil && a[j].health.openConnections != nil {
+		return false
+	}
+	if a[i].health.openConnections != nil && a[j].health.openConnections == nil {
+		return true
+	}
+	return *a[i].health.openConnections < *a[j].health.openConnections
 }
 
 // Balancer MySQL load balancer
@@ -50,9 +62,6 @@ func (b *Balancer) serversUP() Servers {
 func (b *Balancer) startChecks() {
 	for i := range b.servers {
 		b.servers[i].CheckHealth(b.traceOn, b.logger)
-	}
-	if b.config.CheckInterval == 0 {
-		b.config.CheckInterval = 3
 	}
 	concurrence.Every(time.Duration(b.config.CheckInterval)*time.Second, func(time.Time) bool {
 		b.servers.eachASYNC(func(index int, server *Server) {
@@ -86,14 +95,17 @@ func (b *Balancer) PickServer() *Server {
 
 // New creates a new instance of Balancer
 func New(config *Config) *Balancer {
+	// Minimum check interval
+	if config.CheckInterval == 0 {
+		config.CheckInterval = 3
+	}
+
 	servers := make(Servers, len(config.ServersSettings))
 	for i, serverSettings := range config.ServersSettings {
 		servers[i] = &Server{
 			name:           serverSettings.Name,
 			serverSettings: serverSettings,
 			health: &ServerHealth{
-				up:         false,
-				err:        nil,
 				lastUpdate: time.Now(),
 			},
 		}

@@ -3,337 +3,231 @@ package balancer
 import (
 	"errors"
 	"testing"
-	"time"
 
-	"github.com/pborman/uuid"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
+var (
+	ServerDownDueToMySQLConnection, ServerDownDueToMySQLSlaveStatus, ServerDownDueToMySQLThreadStatus         *Server
+	ServerUP, ServerUPWithDelay, ServerUPWithHighThreadConnections, ServerUPWithDelayAndHighThreadConnections *Server
+)
+
+func init() {
+	var intNilHelper *int
+	zeroHelper := 0
+	oneHelper := 1
+	thousandHelper := 1000
+
+	ServerDownDueToMySQLConnection = &Server{
+		name:   "ServerDownDueToMySQLConnection",
+		health: &ServerHealth{},
+	}
+	ServerDownDueToMySQLConnection.health.setDown(
+		errors.New("__MYSQL_CONNECTION_ERROR__"), intNilHelper, intNilHelper,
+	)
+
+	ServerDownDueToMySQLSlaveStatus = &Server{
+		name:   "ServerDownDueToMySQLSlaveStatus",
+		health: &ServerHealth{},
+	}
+	ServerDownDueToMySQLSlaveStatus.health.setDown(
+		errors.New("__MYSQL_SLAVE_STATUS_ERROR__"), intNilHelper, intNilHelper,
+	)
+
+	ServerDownDueToMySQLThreadStatus = &Server{
+		name:   "ServerDownDueToMySQLThreadStatus",
+		health: &ServerHealth{},
+	}
+	ServerDownDueToMySQLThreadStatus.health.setDown(
+		errors.New("__MYSQL_THREADS_STATUS_ERROR__"), &zeroHelper, intNilHelper,
+	)
+
+	ServerUP = &Server{
+		name:   "ServerUP",
+		health: &ServerHealth{},
+	}
+	ServerUP.health.setUP(&zeroHelper, &oneHelper)
+
+	ServerUPWithDelay = &Server{
+		name:   "ServerUPWithDelay",
+		health: &ServerHealth{},
+	}
+	ServerUPWithDelay.health.setUP(&thousandHelper, &oneHelper)
+
+	ServerUPWithHighThreadConnections = &Server{
+		name:   "ServerUPWithHighThreadConnections",
+		health: &ServerHealth{},
+	}
+	ServerUPWithHighThreadConnections.health.setUP(&zeroHelper, &thousandHelper)
+
+	ServerUPWithDelayAndHighThreadConnections = &Server{
+		name:   "ServerUPWithDelayAndHighThreadConnections",
+		health: &ServerHealth{},
+	}
+	ServerUPWithDelayAndHighThreadConnections.health.setUP(&thousandHelper, &thousandHelper)
+}
+
 func TestBalancer(t *testing.T) {
-	var zero int
-	one := 1
-	ten := 10
 	defaultConfig := &Config{}
 
 	Convey("Given a balancer with only one server", t, func() {
-		Convey("It fails when the server is down", func() {
-			var servers Servers
-			servers = append(servers, &Server{
-				name: uuid.New(),
-				health: &ServerHealth{
-					up:                  false,
-					err:                 errors.New("any error"),
-					secondsBehindMaster: &zero,
-					openConnections:     1,
-					lastUpdate:          time.Now(),
-				},
-			})
-
-			balancer := &Balancer{config: defaultConfig, servers: servers}
+		Convey("It fails when the server is down due to error acquiring connection", func() {
+			balancer := &Balancer{config: defaultConfig, servers: []*Server{
+				ServerDownDueToMySQLConnection,
+			}}
 			So(balancer.PickServer(), ShouldBeNil)
 		})
-		Convey("It succeeds when the server is UP", func() {
-			var servers Servers
-			servers = append(servers, &Server{
-				name: "myserver",
-				health: &ServerHealth{
-					up:                  true,
-					err:                 nil,
-					secondsBehindMaster: &zero,
-					openConnections:     1,
-					lastUpdate:          time.Now(),
-				},
-			})
 
-			balancer := &Balancer{config: defaultConfig, servers: servers}
-			So(balancer.PickServer().name, ShouldEqual, "myserver")
+		Convey("It fails when the server is down due to error acquiring slave status", func() {
+			balancer := &Balancer{config: defaultConfig, servers: []*Server{
+				ServerDownDueToMySQLSlaveStatus,
+			}}
+			So(balancer.PickServer(), ShouldBeNil)
+		})
+
+		Convey("It fails when the server is down due to error acquiring thread status", func() {
+			balancer := &Balancer{config: defaultConfig, servers: []*Server{
+				ServerDownDueToMySQLThreadStatus,
+			}}
+			So(balancer.PickServer(), ShouldBeNil)
+		})
+
+		Convey("It succeeds when the server is healthy", func() {
+			balancer := &Balancer{config: defaultConfig, servers: []*Server{
+				ServerUP,
+			}}
+			So(balancer.PickServer(), ShouldPointTo, ServerUP)
+
+			balancer = &Balancer{config: defaultConfig, servers: []*Server{
+				ServerUPWithDelay,
+			}}
+			So(balancer.PickServer(), ShouldPointTo, ServerUPWithDelay)
+
+			balancer = &Balancer{config: defaultConfig, servers: []*Server{
+				ServerUPWithHighThreadConnections,
+			}}
+			So(balancer.PickServer(), ShouldPointTo, ServerUPWithHighThreadConnections)
+
+			balancer = &Balancer{config: defaultConfig, servers: []*Server{
+				ServerUPWithDelayAndHighThreadConnections,
+			}}
+			So(balancer.PickServer(), ShouldPointTo, ServerUPWithDelayAndHighThreadConnections)
 		})
 	})
 
-	Convey("Given a balancer with two or more servers", t, func() {
-		Convey("It fails when all servers are down", func() {
-			var servers Servers
-			servers = append(servers, &Server{
-				name: "myserver",
-				health: &ServerHealth{
-					up:                  false,
-					err:                 errors.New("any error"),
-					secondsBehindMaster: nil,
-					openConnections:     0,
-					lastUpdate:          time.Now(),
-				},
-			})
-			servers = append(servers, &Server{
-				name: "myserver1",
-				health: &ServerHealth{
-					up:                  false,
-					err:                 errors.New("any error"),
-					secondsBehindMaster: nil,
-					openConnections:     0,
-					lastUpdate:          time.Now(),
-				},
-			})
-			servers = append(servers, &Server{
-				name: "myserver2",
-				health: &ServerHealth{
-					up:                  false,
-					err:                 errors.New("any error"),
-					secondsBehindMaster: nil,
-					openConnections:     0,
-					lastUpdate:          time.Now(),
-				},
-			})
+	Convey("Given a balancer with more than one server", t, func() {
+		Convey("It fails when all servers are down no matter the reason", func() {
+			balancer := &Balancer{config: defaultConfig, servers: []*Server{
+				ServerDownDueToMySQLConnection,
+				ServerDownDueToMySQLSlaveStatus,
+				ServerDownDueToMySQLThreadStatus,
+			}}
+			So(balancer.PickServer(), ShouldBeNil)
 
-			balancer := &Balancer{config: defaultConfig, servers: servers}
+			balancer = &Balancer{config: defaultConfig, servers: []*Server{
+				ServerDownDueToMySQLConnection,
+				ServerDownDueToMySQLConnection,
+				ServerDownDueToMySQLConnection,
+			}}
+			So(balancer.PickServer(), ShouldBeNil)
+
+			balancer = &Balancer{config: defaultConfig, servers: []*Server{
+				ServerDownDueToMySQLSlaveStatus,
+				ServerDownDueToMySQLSlaveStatus,
+				ServerDownDueToMySQLSlaveStatus,
+			}}
+			So(balancer.PickServer(), ShouldBeNil)
+
+			balancer = &Balancer{config: defaultConfig, servers: []*Server{
+				ServerDownDueToMySQLThreadStatus,
+				ServerDownDueToMySQLThreadStatus,
+				ServerDownDueToMySQLThreadStatus,
+			}}
 			So(balancer.PickServer(), ShouldBeNil)
 		})
 
-		Convey("When at least one server is up", func() {
-			Convey("It should return the most suited server (up -> lowest seconds behind master -> less connected threads)", func() {
-				var servers1 Servers
-				servers1 = append(servers1, &Server{
-					name: "myserver",
-					health: &ServerHealth{
-						up:                  false,
-						err:                 errors.New("any error"),
-						secondsBehindMaster: nil,
-						openConnections:     0,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers1 = append(servers1, &Server{
-					name: "myserver1",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &zero,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers1 = append(servers1, &Server{
-					name: "myserver2",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &zero,
-						openConnections:     1,
-						lastUpdate:          time.Now(),
-					},
-				})
+		Convey("In the case of one healthy slave", func() {
 
-				balancer1 := &Balancer{config: defaultConfig, servers: servers1}
-				So(balancer1.PickServer().name, ShouldEqual, "myserver2")
+			Convey("In the case of one healthy slave", func() {
+				Convey("It returns the healthy server no matter its index", func() {
+					balancer := &Balancer{config: defaultConfig, servers: []*Server{
+						ServerUP,
+						ServerDownDueToMySQLConnection,
+						ServerDownDueToMySQLConnection,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUP)
 
-				var servers3 Servers
-				servers3 = append(servers3, &Server{
-					name: "myserver",
-					health: &ServerHealth{
-						up:                  false,
-						err:                 errors.New("any error"),
-						secondsBehindMaster: nil,
-						openConnections:     0,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers3 = append(servers3, &Server{
-					name: "myserver1",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: nil,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers3 = append(servers3, &Server{
-					name: "myserver2",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: nil,
-						openConnections:     1,
-						lastUpdate:          time.Now(),
-					},
-				})
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUP,
+						ServerDownDueToMySQLConnection,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUP)
 
-				balancer3 := &Balancer{config: defaultConfig, servers: servers3}
-				So(balancer3.PickServer().name, ShouldEqual, "myserver2")
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerDownDueToMySQLConnection,
+						ServerUP,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUP)
+				})
+			})
 
-				var servers2 Servers
-				servers2 = append(servers2, &Server{
-					name: "myserver",
-					health: &ServerHealth{
-						up:                  false,
-						err:                 errors.New("any error"),
-						secondsBehindMaster: nil,
-						openConnections:     0,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers2 = append(servers2, &Server{
-					name: "myserver1",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &one,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers2 = append(servers2, &Server{
-					name: "myserver2",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &ten,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
-				})
+			Convey("In the case of more than one healthy slaves", func() {
+				Convey("It returns the healthyest server no matter its index", func() {
+					ServerUP2 := *ServerUP
 
-				balancer2 := &Balancer{config: defaultConfig, servers: servers2}
-				So(balancer2.PickServer().name, ShouldEqual, "myserver1")
+					balancer := &Balancer{config: defaultConfig, servers: []*Server{
+						ServerUP,
+						&ServerUP2,
+						ServerDownDueToMySQLConnection,
+						ServerUPWithDelay,
+						ServerUPWithHighThreadConnections,
+						ServerUPWithDelayAndHighThreadConnections,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUP)
 
-				var servers4 Servers
-				servers4 = append(servers4, &Server{
-					name: "myserver",
-					health: &ServerHealth{
-						up:                  false,
-						err:                 errors.New("any error"),
-						secondsBehindMaster: nil,
-						openConnections:     0,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers4 = append(servers4, &Server{
-					name: "myserver1",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &one,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers4 = append(servers4, &Server{
-					name: "myserver2",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &one,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
-				})
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUPWithDelay,
+						ServerUPWithHighThreadConnections,
+						&ServerUP2,
+						ServerUP,
+						ServerUPWithDelayAndHighThreadConnections,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, &ServerUP2)
 
-				balancer4 := &Balancer{config: defaultConfig, servers: servers4}
-				So(balancer4.PickServer().name, ShouldEqual, "myserver1")
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUPWithDelay,
+						ServerUPWithHighThreadConnections,
+						ServerUPWithDelayAndHighThreadConnections,
+						ServerUP,
+						&ServerUP2,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUP)
 
-				var servers5 Servers
-				servers5 = append(servers5, &Server{
-					name: "myserver",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &zero,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers5 = append(servers5, &Server{
-					name: "myserver1",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &one,
-						openConnections:     1,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers5 = append(servers5, &Server{
-					name: "myserver2",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: nil,
-						openConnections:     0,
-						lastUpdate:          time.Now(),
-					},
-				})
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUPWithDelayAndHighThreadConnections,
+						ServerUPWithDelay,
+						ServerUPWithHighThreadConnections,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUPWithHighThreadConnections)
 
-				balancer5 := &Balancer{config: defaultConfig, servers: servers5}
-				So(balancer5.PickServer().name, ShouldEqual, "myserver")
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUPWithDelayAndHighThreadConnections,
+						ServerUPWithDelay,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUPWithDelay)
 
-				var servers6 Servers
-				servers6 = append(servers6, &Server{
-					name: "myserver",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: nil,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUPWithDelayAndHighThreadConnections,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUPWithDelayAndHighThreadConnections)
 				})
-				servers6 = append(servers6, &Server{
-					name: "myserver1",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &ten,
-						openConnections:     999,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers6 = append(servers6, &Server{
-					name: "myserver2",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: nil,
-						openConnections:     0,
-						lastUpdate:          time.Now(),
-					},
-				})
-
-				balancer6 := &Balancer{config: defaultConfig, servers: servers6}
-				So(balancer6.PickServer().name, ShouldEqual, "myserver1")
-
-				var servers7 Servers
-				servers7 = append(servers7, &Server{
-					name: "myserver",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &one,
-						openConnections:     10,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers7 = append(servers7, &Server{
-					name: "myserver1",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: &one,
-						openConnections:     999,
-						lastUpdate:          time.Now(),
-					},
-				})
-				servers7 = append(servers7, &Server{
-					name: "myserver2",
-					health: &ServerHealth{
-						up:                  true,
-						err:                 nil,
-						secondsBehindMaster: nil,
-						openConnections:     0,
-						lastUpdate:          time.Now(),
-					},
-				})
-
-				balancer7 := &Balancer{config: defaultConfig, servers: servers7}
-				So(balancer7.PickServer().name, ShouldEqual, "myserver")
 			})
 		})
 	})
