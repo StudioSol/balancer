@@ -1,10 +1,7 @@
-Balancer [![Build Status](https://drone.io/github.com/StudioSol/balancer/status.png)](https://drone.io/github.com/StudioSol/balancer/latest) [![GoDoc](https://godoc.org/github.com/StudioSol/balancer?status.svg)](https://godoc.org/github.com/StudioSol/balancer) [![Go Report Card](https://goreportcard.com/badge/github.com/StudioSol/balancer)](https://goreportcard.com/report/github.com/StudioSol/balancer)
-========
+## MySQL Load Balancer 
+[![Build Status](https://drone.io/github.com/StudioSol/balancer/status.png)](https://drone.io/github.com/StudioSol/balancer/latest) [![GoDoc](https://godoc.org/github.com/StudioSol/balancer?status.svg)](https://godoc.org/github.com/StudioSol/balancer) [![Go Report Card](https://goreportcard.com/badge/github.com/StudioSol/balancer)](https://goreportcard.com/report/github.com/StudioSol/balancer)
 
-MySQL Load Balancer
-
-
-#### Usage
+### Usage
 
 ```go
 package main
@@ -30,26 +27,26 @@ func main() {
         // A balancer.Logger interface implementation
         Logger: log,
 
-				// Slave servers' configuration
+		// Slave servers' configuration
         ServersSettings: []balancer.ServerSettings{
             balancer.ServerSettings{
-								// Name of the MySQL Slave Server
-                Name: "slave 1",
+			// Name of the MySQL Slave Server
+			Name: "slave 1",
 
-								// Connection string of the MySQL user used for reading
-                DSN: "user:password@tcp(127.0.0.1:3306)/database",
+			// Connection string of the MySQL user used for reading
+			DSN: "user:password@tcp(127.0.0.1:3306)/database",
 
-								// Connection string of the MySQL user used for status. The chosen
-								// user must have "REPLICATION STATUS" permission
-                ReplicationDSN: "replication_user:password@tcp(127.0.0.1:3306)/",
+			// Connection string of the MySQL user used for status. The chosen
+			// user must have "REPLICATION STATUS" permission
+			ReplicationDSN: "replication_user:password@tcp(127.0.0.1:3306)/",
 
-								// Maximum idle connection
-                MaxIdleConns:   0,
+			// Maximum idle connections
+			MaxIdleConns: 0,
 
-								// Maximum open connection
-                MaxOpenConns:   10,
-            },
-            ...
+			// Maximum open connections
+			MaxOpenConns: 10,
+		},
+		// ...
     }
 
     db := balancer.New(config)
@@ -60,6 +57,8 @@ func main() {
     }
 
     // Be happy! :)
-    server.GetConnection().SelectOne(...)
+    server.GetConnection().SelectOne(
+    	// ...
+    )
 }
 ```
