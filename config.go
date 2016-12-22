@@ -9,8 +9,9 @@ type Config struct {
 }
 
 type ServerSettings struct {
-	Name         string
-	DSN          string
-	MaxIdleConns int
-	MaxOpenConns int
+	Name           string
+	DSN            string
+	ReplicationDSN string
+	MaxIdleConns   int
+	MaxOpenConns   int
 }

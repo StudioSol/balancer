@@ -10,11 +10,12 @@ import (
 )
 
 type Server struct {
-	name           string
-	health         *ServerHealth
-	serverSettings ServerSettings
-	connection     *gorp.DbMap
-	traceOn        bool
+	name                  string
+	health                *ServerHealth
+	serverSettings        ServerSettings
+	connection            *gorp.DbMap
+	replicationConnection *gorp.DbMap
+	traceOn               bool
 }
 
 func (s *Server) GetName() string {
@@ -29,40 +30,59 @@ func (s *Server) GetConnection() *gorp.DbMap {
 	return s.connection
 }
 
+func (s *Server) connect(dsn string, traceOn bool, logger Logger) (*gorp.DbMap, error) {
+	conn, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	conn.SetMaxIdleConns(s.serverSettings.MaxIdleConns)
+	conn.SetMaxOpenConns(s.serverSettings.MaxOpenConns)
+
+	if err := conn.Ping(); err != nil {
+		return nil, err
+	}
+
+	connection := &gorp.DbMap{
+		Db:      conn,
+		Dialect: gorp.MySQLDialect{},
+	}
+
+	if traceOn && logger != nil {
+		connection.TraceOn("[sql]", logger)
+	}
+
+	return connection, nil
+}
+
 func (s *Server) connectIfNecessary(traceOn bool, logger Logger) error {
 	if s.connection == nil {
-		conn, err := sql.Open("mysql", s.serverSettings.DSN)
+		conn, err := s.connect(s.serverSettings.DSN, traceOn, logger)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not connect to MySQL read user: %s", err.Error())
 		}
-
-		conn.SetMaxIdleConns(s.serverSettings.MaxIdleConns)
-		conn.SetMaxOpenConns(s.serverSettings.MaxOpenConns)
-
-		if err := conn.Ping(); err != nil {
-			return err
+		s.connection = conn
+	}
+	if s.replicationConnection == nil {
+		conn, err := s.connect(s.serverSettings.ReplicationDSN, traceOn, logger)
+		if err != nil {
+			return fmt.Errorf("could not connect to MySQL replication user: %s", err.Error())
 		}
-
-		s.connection = &gorp.DbMap{
-			Db:      conn,
-			Dialect: gorp.MySQLDialect{},
-		}
-
-		if traceOn && logger != nil {
-			s.connection.TraceOn("[sql]", logger)
-		}
+		s.replicationConnection = conn
 	}
 	return nil
 }
 
 func (s *Server) rawQuery(query string, logger Logger) (map[string]string, error) {
-	rows, err := s.connection.Db.Query(query)
+	rows, err := s.replicationConnection.Db.Query(query)
 	if err != nil {
 		return nil, err
 	}
+
 	if !rows.Next() {
 		return nil, sql.ErrNoRows
 	}
+
 	defer func() {
 		if err := rows.Close(); err != nil && logger != nil {
 			logger.Error(err)
@@ -99,8 +119,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 
 	if err := s.connectIfNecessary(traceOn, logger); err != nil {
 		s.health.setDown(
-			fmt.Errorf("error acquiring MySQL connection: %s", err),
-			secondsBehindMaster, openConnections,
+			err, secondsBehindMaster, openConnections,
 		)
 		return
 	}
@@ -146,7 +165,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 		)
 		return
 	}
-	
+
 	openConnections = &tmp2
 
 	s.health.setUP(secondsBehindMaster, openConnections)
