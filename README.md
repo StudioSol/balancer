@@ -1,12 +1,12 @@
 Balancer [![Build Status](https://drone.io/github.com/StudioSol/balancer/status.png)](https://drone.io/github.com/StudioSol/balancer/latest) [![GoDoc](https://godoc.org/github.com/StudioSol/balancer?status.svg)](https://godoc.org/github.com/StudioSol/balancer) [![Go Report Card](https://goreportcard.com/badge/github.com/StudioSol/balancer)](https://goreportcard.com/report/github.com/StudioSol/balancer)
 ========
 
-MySql Load Balancer
+MySQL Load Balancer
 
 
 #### Usage
 
-```GO
+```go
 package main
 
 import (
@@ -18,24 +18,38 @@ import (
 
 func main() {
     config := balancer.Config{
+        // Time in seconds in wich the health of the slaves is going to be checked
         CheckInterval: 3,
-        StartCheck:    true,
-        TraceOn:       false,
-        Logger:        log,
-        ServersSettings:     []balancer.ServerSettings{
+
+        // Wether the balancer should start checking health
+        StartCheck: true,
+
+        // Wether the queries executed by the balancer server should be logged
+        TraceOn: false,
+
+        // A balancer.Logger interface implementation
+        Logger: log,
+
+				// Slave servers' configuration
+        ServersSettings: []balancer.ServerSettings{
             balancer.ServerSettings{
-                Name:         "slave 1",
-                DSN:          "user:pass@tcp(127.0.0.1:3306)/database",
-                MaxIdleConns: 0,
-                MaxOpenConns: 10,
+								// Name of the MySQL Slave Server
+                Name: "slave 1",
+
+								// Connection string of the MySQL user used for reading
+                DSN: "user:password@tcp(127.0.0.1:3306)/database",
+
+								// Connection string of the MySQL user used for status. The chosen
+								// user must have "REPLICATION STATUS" permission
+                ReplicationDSN: "replication_user:password@tcp(127.0.0.1:3306)/",
+
+								// Maximum idle connection
+                MaxIdleConns:   0,
+
+								// Maximum open connection
+                MaxOpenConns:   10,
             },
-            balancer.ServerSettings{
-                Name:         "slaves 2",
-                DSN:          "user:pass@tcp(127.0.0.1:3306)/database",
-                MaxIdleConns: 0,
-                MaxOpenConns: 0,
-            }
-        }
+            ...
     }
 
     db := balancer.New(config)
@@ -45,6 +59,7 @@ func main() {
         fmt.Println("No Server avaliable", server)
     }
 
+    // Be happy! :)
     server.GetConnection().SelectOne(...)
 }
 ```
