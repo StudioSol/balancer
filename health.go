@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// ServerHealth represents a Server health state
 type ServerHealth struct {
 	sync.Mutex
 
@@ -16,20 +17,24 @@ type ServerHealth struct {
 	openConnections     *int
 }
 
+// IsUP returns if the server is UP
 func (h *ServerHealth) IsUP() bool {
 	h.Lock()
 	defer h.Unlock()
 	return h.up
 }
 
+// GetErr returns server's last error
 func (h *ServerHealth) GetErr() error {
 	return h.err
 }
 
+// GetSecondsBehindMaster returns server's seconds behind master
 func (h *ServerHealth) GetSecondsBehindMaster() *int {
 	return h.secondsBehindMaster
 }
 
+// GetOpenConnections returns server's open connections
 func (h *ServerHealth) GetOpenConnections() *int {
 	return h.openConnections
 }

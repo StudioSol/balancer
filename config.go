@@ -1,5 +1,6 @@
 package balancer
 
+// Config configuration options for the balancer
 type Config struct {
 	CheckInterval   int64
 	StartCheck      bool
@@ -8,6 +9,7 @@ type Config struct {
 	ServersSettings []ServerSettings
 }
 
+// ServerSettings servers' configuration options
 type ServerSettings struct {
 	Name           string
 	DSN            string
