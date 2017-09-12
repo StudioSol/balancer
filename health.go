@@ -15,6 +15,7 @@ type ServerHealth struct {
 
 	secondsBehindMaster *int
 	openConnections     *int
+	runningConnections  *int
 }
 
 // IsUP returns if the server is UP
@@ -39,22 +40,29 @@ func (h *ServerHealth) GetOpenConnections() *int {
 	return h.openConnections
 }
 
-func (h *ServerHealth) setUP(secondsBehindMaster *int, openConnections *int) {
+// GetRunningConnections returns the number of connections that are not sleeping.
+func (h *ServerHealth) GetRunningConnections() *int {
+	return h.runningConnections
+}
+
+func (h *ServerHealth) setUP(secondsBehindMaster, openConnections, runningConnections *int) {
 	h.Lock()
 	defer h.Unlock()
 	h.up = true
 	h.err = nil
 	h.secondsBehindMaster = secondsBehindMaster
 	h.openConnections = openConnections
+	h.runningConnections = runningConnections
 	h.lastUpdate = time.Now()
 }
 
-func (h *ServerHealth) setDown(err error, secondsBehindMaster *int, openConnections *int) {
+func (h *ServerHealth) setDown(err error, secondsBehindMaster, openConnections, runningConnections *int) {
 	h.Lock()
 	defer h.Unlock()
 	h.up = false
 	h.err = err
 	h.secondsBehindMaster = secondsBehindMaster
 	h.openConnections = openConnections
+	h.runningConnections = runningConnections
 	h.lastUpdate = time.Now()
 }
