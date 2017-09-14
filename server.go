@@ -61,11 +61,11 @@ func (s *Server) connect(dsn string, traceOn bool, logger Logger) (*gorp.DbMap, 
 
 // CheckHealth check server's health and set it's state
 func (s *Server) CheckHealth(traceOn bool, logger Logger) {
-	var secondsBehindMaster, openConnections *int
+	var secondsBehindMaster, openConnections, runningConnections *int
 
 	if err := s.connectIfNecessary(traceOn, logger); err != nil {
 		s.health.setDown(
-			err, secondsBehindMaster, openConnections,
+			err, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
@@ -76,7 +76,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 		if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
 			s.health.setDown(
 				fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
-				secondsBehindMaster, openConnections,
+				secondsBehindMaster, openConnections, runningConnections,
 			)
 			return
 		}
@@ -85,7 +85,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 		if err != nil {
 			s.health.setDown(
 				fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
-				secondsBehindMaster, openConnections,
+				secondsBehindMaster, openConnections, runningConnections,
 			)
 			return
 		}
@@ -96,8 +96,8 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	threadsConnectedResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_connected'", logger)
 	if err != nil {
 		s.health.setDown(
-			fmt.Errorf("failed acquiring MySQL thread status:  %s", err),
-			secondsBehindMaster, openConnections,
+			fmt.Errorf("failed acquiring MySQL thread connected status:  %s", err),
+			secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
@@ -107,14 +107,35 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if err != nil {
 		s.health.setDown(
 			fmt.Errorf("unexpected value for Threads_connected returned from MySQL:  %s", err),
-			secondsBehindMaster, openConnections,
+			secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
 
 	openConnections = &tmp2
 
-	s.health.setUP(secondsBehindMaster, openConnections)
+	threadsRunningResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_running'", logger)
+	if err != nil {
+		s.health.setDown(
+			fmt.Errorf("failed acquiring MySQL thread running status:  %s", err),
+			secondsBehindMaster, openConnections, runningConnections,
+		)
+		return
+	}
+
+	threadsRunning := threadsRunningResult["Value"]
+	tmp3, err := strconv.Atoi(threadsRunning)
+	if err != nil {
+		s.health.setDown(
+			fmt.Errorf("unexpected value for Threads_running returned from MySQL:  %s", err),
+			secondsBehindMaster, openConnections, runningConnections,
+		)
+		return
+	}
+
+	runningConnections = &tmp3
+
+	s.health.setUP(secondsBehindMaster, openConnections, runningConnections)
 }
 
 func (s *Server) connectIfNecessary(traceOn bool, logger Logger) error {

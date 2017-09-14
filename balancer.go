@@ -21,18 +21,33 @@ func (a bySecondsBehindMaster) Less(i, j int) bool {
 	return *a[i].health.secondsBehindMaster < *a[j].health.secondsBehindMaster
 }
 
-type byOpenConnections Servers
+type byConnections Servers
 
-func (a byOpenConnections) Len() int      { return len(a) }
-func (a byOpenConnections) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a byOpenConnections) Less(i, j int) bool {
-	if a[i].health.openConnections == nil && a[j].health.openConnections != nil {
+func (a byConnections) Len() int      { return len(a) }
+func (a byConnections) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a byConnections) Less(i, j int) bool {
+
+	if a[i].health.runningConnections == nil && a[j].health.runningConnections != nil {
 		return false
 	}
-	if a[i].health.openConnections != nil && a[j].health.openConnections == nil {
+	if a[i].health.runningConnections != nil && a[j].health.runningConnections == nil {
 		return true
 	}
-	return *a[i].health.openConnections < *a[j].health.openConnections
+
+	if a[i].health.runningConnections == a[j].health.runningConnections {
+
+		if a[i].health.openConnections == nil && a[j].health.openConnections != nil {
+			return false
+		}
+		if a[i].health.openConnections != nil && a[j].health.openConnections == nil {
+			return true
+		}
+		return *a[i].health.openConnections < *a[j].health.openConnections
+
+	}
+
+	return *a[i].health.runningConnections < *a[j].health.runningConnections
+
 }
 
 // Balancer MySQL load balancer
@@ -89,7 +104,7 @@ func (b *Balancer) PickServer() *Server {
 		return candidates[0]
 	}
 
-	sort.Sort(byOpenConnections(candidates))
+	sort.Sort(byConnections(candidates))
 	return candidates[0]
 }
 
@@ -125,6 +140,7 @@ func New(config *Config) *Balancer {
 	return balancer
 }
 
+// Logger ...
 type Logger interface {
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
