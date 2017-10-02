@@ -1,5 +1,9 @@
 package balancer
 
+import (
+	"time"
+)
+
 // Config configuration options for the balancer
 type Config struct {
 	CheckInterval   int64
@@ -11,9 +15,10 @@ type Config struct {
 
 // ServerSettings servers' configuration options
 type ServerSettings struct {
-	Name           string
-	DSN            string
-	ReplicationDSN string
-	MaxIdleConns   int
-	MaxOpenConns   int
+	Name             string
+	DSN              string
+	ReplicationDSN   string
+	MaxIdleConns     int
+	MaxOpenConns     int
+	MaxLifetimeConns time.Duration
 }

@@ -10,6 +10,7 @@ import (
 var (
 	ServerDownDueToMySQLConnection, ServerDownDueToMySQLSlaveStatus, ServerDownDueToMySQLThreadStatus         *Server
 	ServerUP, ServerUPWithDelay, ServerUPWithHighThreadConnections, ServerUPWithDelayAndHighThreadConnections *Server
+	ServerUPWithHighRunningConnections                                                                        *Server
 )
 
 func init() {
@@ -23,7 +24,7 @@ func init() {
 		health: &ServerHealth{},
 	}
 	ServerDownDueToMySQLConnection.health.setDown(
-		errors.New("__MYSQL_CONNECTION_ERROR__"), intNilHelper, intNilHelper,
+		errors.New("__MYSQL_CONNECTION_ERROR__"), intNilHelper, intNilHelper, intNilHelper,
 	)
 
 	ServerDownDueToMySQLSlaveStatus = &Server{
@@ -31,7 +32,7 @@ func init() {
 		health: &ServerHealth{},
 	}
 	ServerDownDueToMySQLSlaveStatus.health.setDown(
-		errors.New("__MYSQL_SLAVE_STATUS_ERROR__"), intNilHelper, intNilHelper,
+		errors.New("__MYSQL_SLAVE_STATUS_ERROR__"), intNilHelper, intNilHelper, intNilHelper,
 	)
 
 	ServerDownDueToMySQLThreadStatus = &Server{
@@ -39,32 +40,38 @@ func init() {
 		health: &ServerHealth{},
 	}
 	ServerDownDueToMySQLThreadStatus.health.setDown(
-		errors.New("__MYSQL_THREADS_STATUS_ERROR__"), &zeroHelper, intNilHelper,
+		errors.New("__MYSQL_THREADS_STATUS_ERROR__"), &zeroHelper, intNilHelper, intNilHelper,
 	)
 
 	ServerUP = &Server{
 		name:   "ServerUP",
 		health: &ServerHealth{},
 	}
-	ServerUP.health.setUP(&zeroHelper, &oneHelper)
+	ServerUP.health.setUP(&zeroHelper, &oneHelper, &oneHelper)
 
 	ServerUPWithDelay = &Server{
 		name:   "ServerUPWithDelay",
 		health: &ServerHealth{},
 	}
-	ServerUPWithDelay.health.setUP(&thousandHelper, &oneHelper)
+	ServerUPWithDelay.health.setUP(&thousandHelper, &oneHelper, &oneHelper)
 
 	ServerUPWithHighThreadConnections = &Server{
 		name:   "ServerUPWithHighThreadConnections",
 		health: &ServerHealth{},
 	}
-	ServerUPWithHighThreadConnections.health.setUP(&zeroHelper, &thousandHelper)
+	ServerUPWithHighThreadConnections.health.setUP(&zeroHelper, &thousandHelper, &oneHelper)
 
 	ServerUPWithDelayAndHighThreadConnections = &Server{
 		name:   "ServerUPWithDelayAndHighThreadConnections",
 		health: &ServerHealth{},
 	}
-	ServerUPWithDelayAndHighThreadConnections.health.setUP(&thousandHelper, &thousandHelper)
+	ServerUPWithDelayAndHighThreadConnections.health.setUP(&thousandHelper, &thousandHelper, &oneHelper)
+
+	ServerUPWithHighRunningConnections = &Server{
+		name:   "ServerUPWithHighRunningConnections",
+		health: &ServerHealth{},
+	}
+	ServerUPWithHighRunningConnections.health.setUP(&zeroHelper, &thousandHelper, &thousandHelper)
 }
 
 func TestBalancer(t *testing.T) {
@@ -227,6 +234,14 @@ func TestBalancer(t *testing.T) {
 						ServerUPWithDelayAndHighThreadConnections,
 					}}
 					So(balancer.PickServer(), ShouldPointTo, ServerUPWithDelayAndHighThreadConnections)
+
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUPWithHighThreadConnections,
+						ServerUPWithHighRunningConnections,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUPWithHighThreadConnections)
+
 				})
 			})
 		})
