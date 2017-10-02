@@ -42,6 +42,7 @@ func (s *Server) connect(dsn string, traceOn bool, logger Logger) (*gorp.DbMap, 
 
 	conn.SetMaxIdleConns(s.serverSettings.MaxIdleConns)
 	conn.SetMaxOpenConns(s.serverSettings.MaxOpenConns)
+	conn.SetConnMaxLifetime(s.serverSettings.MaxLifetimeConns)
 
 	if err := conn.Ping(); err != nil {
 		return nil, err
