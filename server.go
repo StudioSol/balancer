@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-gorp/gorp"
 )
+
+var mutex sync.Mutex
 
 // Server server representation
 type Server struct {
@@ -45,6 +48,7 @@ func (s *Server) connect(dsn string, traceOn bool, logger Logger) (*gorp.DbMap, 
 	conn.SetConnMaxLifetime(s.serverSettings.MaxLifetimeConns)
 
 	if err := conn.Ping(); err != nil {
+		conn.Close()
 		return nil, err
 	}
 
@@ -140,6 +144,9 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 }
 
 func (s *Server) connectIfNecessary(traceOn bool, logger Logger) error {
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	if s.connection == nil {
 		conn, err := s.connect(s.serverSettings.DSN, traceOn, logger)
 		if err != nil {
@@ -147,6 +154,7 @@ func (s *Server) connectIfNecessary(traceOn bool, logger Logger) error {
 		}
 		s.connection = conn
 	}
+
 	if s.replicationConnection == nil {
 		conn, err := s.connect(s.serverSettings.ReplicationDSN, traceOn, logger)
 		if err != nil {
@@ -154,6 +162,7 @@ func (s *Server) connectIfNecessary(traceOn bool, logger Logger) error {
 		}
 		s.replicationConnection = conn
 	}
+
 	return nil
 }
 
