@@ -1,0 +1,10 @@
+language: go
+go:
+- 1.11
+go_import_path: github.com/StudioSol/balancer
+install:
+  - make dependency
+script:
+  - make test
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
