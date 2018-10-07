@@ -1,5 +1,9 @@
 ## MySQL Load Balancer 
-[![Build Status](https://drone.io/github.com/StudioSol/balancer/status.png)](https://drone.io/github.com/StudioSol/balancer/latest) [![GoDoc](https://godoc.org/github.com/StudioSol/balancer?status.svg)](https://godoc.org/github.com/StudioSol/balancer) [![Go Report Card](https://goreportcard.com/badge/github.com/StudioSol/balancer)](https://goreportcard.com/report/github.com/StudioSol/balancer)
+
+[![Build Status](https://travis-ci.org/StudioSol/balancer.svg?branch=master)](https://travis-ci.org/StudioSol/balancer)
+[![codecov](https://codecov.io/gh/StudioSol/balancer/branch/master/graph/badge.svg)](https://codecov.io/gh/StudioSol/balancer)
+[![GoDoc](https://godoc.org/github.com/StudioSol/balancer?status.svg)](https://godoc.org/github.com/StudioSol/balancer)
+[![Go Report Card](https://goreportcard.com/badge/github.com/StudioSol/balancer)](https://goreportcard.com/report/github.com/StudioSol/balancer)
 
 ### Usage
 
