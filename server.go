@@ -76,27 +76,32 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	}
 
 	slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger)
-	if err == nil {
-		rawSecondsBehindMaster := strings.TrimSpace(slaveStatusResult["Seconds_Behind_Master"])
-		if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
-			s.health.setDown(
-				fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
-				secondsBehindMaster, openConnections, runningConnections,
-			)
-			return
-		}
-
-		tmp, err := strconv.Atoi(rawSecondsBehindMaster)
-		if err != nil {
-			s.health.setDown(
-				fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
-				secondsBehindMaster, openConnections, runningConnections,
-			)
-			return
-		}
-
-		secondsBehindMaster = &tmp
+	if err != nil {
+		s.health.setDown(
+			err, secondsBehindMaster, openConnections, runningConnections,
+		)
+		return
 	}
+
+	rawSecondsBehindMaster := strings.TrimSpace(slaveStatusResult["Seconds_Behind_Master"])
+	if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
+		s.health.setDown(
+			fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
+			secondsBehindMaster, openConnections, runningConnections,
+		)
+		return
+	}
+
+	tmp, err := strconv.Atoi(rawSecondsBehindMaster)
+	if err != nil {
+		s.health.setDown(
+			fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
+			secondsBehindMaster, openConnections, runningConnections,
+		)
+		return
+	}
+
+	secondsBehindMaster = &tmp
 
 	threadsConnectedResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_connected'", logger)
 	if err != nil {
