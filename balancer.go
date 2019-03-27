@@ -74,18 +74,9 @@ func (b *Balancer) serversUP() Servers {
 	return serversUP
 }
 
-func (b *Balancer) initChecks() {
-	for i := range b.servers {
-		b.servers[i].CheckHealth(b.traceOn, b.logger)
-	}
-}
-
-func (b *Balancer) startChecks() {
-	concurrence.Every(time.Duration(b.config.CheckInterval)*time.Second, func(time.Time) bool {
-		b.servers.eachASYNC(func(index int, server *Server) {
-			server.CheckHealth(b.traceOn, b.logger)
-		})
-		return true
+func (b *Balancer) check() {
+	b.servers.eachASYNC(func(index int, server *Server) {
+		server.CheckHealth(b.traceOn, b.logger)
 	})
 }
 
@@ -136,9 +127,12 @@ func New(config *Config) *Balancer {
 		traceOn: config.TraceOn,
 	}
 
-	balancer.initChecks()
+	balancer.check()
 	if config.StartCheck {
-		balancer.startChecks()
+		concurrence.Every(time.Duration(config.CheckInterval)*time.Second, func(time.Time) bool {
+			balancer.check()
+			return true
+		})
 	}
 
 	return balancer

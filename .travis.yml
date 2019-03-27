@@ -3,7 +3,7 @@ go:
 - 1.11
 go_import_path: github.com/StudioSol/balancer
 install:
-  - make dependency
+  - make upgrade
 script:
   - make test
 after_success:

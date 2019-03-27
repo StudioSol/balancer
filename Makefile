@@ -1,7 +1,16 @@
-dependency:
-	go get github.com/smartystreets/goconvey/convey
-	go get gopkg.in/DATA-DOG/go-sqlmock.v1
+export GO111MODULE=on
 
+all: deps build
+install: 
+	go install
+build: 
+	go build
+clean: 
+	go clean
+deps: 
+	go build -v ./...
+upgrade: 
+	go get -u
 test:
 	echo "" > coverage.txt
 	for d in $(shell go list ./...); do \

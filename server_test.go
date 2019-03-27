@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-gorp/gorp"
 	. "github.com/smartystreets/goconvey/convey"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
 type LoggerMock struct {
