@@ -20,6 +20,7 @@ type Server struct {
 	connection            *gorp.DbMap
 	replicationConnection *gorp.DbMap
 	traceOn               bool
+	isChecking            bool
 }
 
 // GetName returns server's name
@@ -67,6 +68,16 @@ func (s *Server) connect(dsn string, traceOn bool, logger Logger) (*gorp.DbMap, 
 // CheckHealth check server's health and set it's state
 func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	var secondsBehindMaster, openConnections, runningConnections *int
+
+	// prevent concurrently checks on same server (slow queries/network)
+	if s.isChecking {
+		return
+	}
+
+	s.isChecking = true
+	defer func() {
+		s.isChecking = false
+	}()
 
 	if err := s.connectIfNecessary(traceOn, logger); err != nil {
 		s.health.setDown(
