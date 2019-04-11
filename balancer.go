@@ -2,6 +2,7 @@ package balancer
 
 import (
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/StudioSol/balancer/concurrence"
@@ -80,6 +81,36 @@ func (b *Balancer) check() {
 	})
 }
 
+func (b *Balancer) waitCheck() {
+	wait := b.config.StartupWait
+	// default to 5s
+	if wait <= 0 {
+		wait = time.Second * 5
+	}
+
+	signal := make(chan struct{}, 0)
+	var expired atomic.Value
+
+	t := time.AfterFunc(wait, func() {
+		expired.Store(struct{}{})
+		signal <- struct{}{}
+	})
+
+	go func() {
+		for i := range b.servers {
+			if expired.Load() != nil {
+				return
+			}
+			b.servers[i].CheckHealth(b.traceOn, b.logger)
+		}
+		if t.Stop() {
+			signal <- struct{}{}
+		}
+	}()
+
+	<-signal
+}
+
 // PickServer returns the best server at a given point in time
 func (b *Balancer) PickServer() *Server {
 	candidates := b.serversUP()
@@ -127,7 +158,7 @@ func New(config *Config) *Balancer {
 		traceOn: config.TraceOn,
 	}
 
-	balancer.check()
+	balancer.waitCheck()
 	if config.StartCheck {
 		concurrence.Every(time.Duration(config.CheckInterval)*time.Second, func(time.Time) bool {
 			balancer.check()
