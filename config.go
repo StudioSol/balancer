@@ -11,6 +11,7 @@ type Config struct {
 	TraceOn         bool
 	Logger          Logger
 	ServersSettings []ServerSettings
+	StartupWait     time.Duration
 }
 
 // ServerSettings servers' configuration options
