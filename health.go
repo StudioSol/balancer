@@ -45,24 +45,21 @@ func (h *ServerHealth) GetRunningConnections() *int {
 	return h.runningConnections
 }
 
-func (h *ServerHealth) setUP(secondsBehindMaster, openConnections, runningConnections *int) {
+func (h *ServerHealth) setStatus(up bool, err error, secondsBehindMaster, openConnections, runningConnections *int) {
 	h.Lock()
 	defer h.Unlock()
-	h.up = true
-	h.err = nil
+	h.up = up
+	h.err = err
 	h.secondsBehindMaster = secondsBehindMaster
 	h.openConnections = openConnections
 	h.runningConnections = runningConnections
 	h.lastUpdate = time.Now()
 }
 
+func (h *ServerHealth) setUP(err error, secondsBehindMaster, openConnections, runningConnections *int) {
+	h.setStatus(true, err, secondsBehindMaster, openConnections, runningConnections)
+}
+
 func (h *ServerHealth) setDown(err error, secondsBehindMaster, openConnections, runningConnections *int) {
-	h.Lock()
-	defer h.Unlock()
-	h.up = false
-	h.err = err
-	h.secondsBehindMaster = secondsBehindMaster
-	h.openConnections = openConnections
-	h.runningConnections = runningConnections
-	h.lastUpdate = time.Now()
+	h.setStatus(false, err, secondsBehindMaster, openConnections, runningConnections)
 }

@@ -9,7 +9,8 @@ import (
 )
 
 var (
-	ServerDownDueToMySQLConnection, ServerDownDueToMySQLSlaveStatus, ServerDownDueToMySQLThreadStatus         *Server
+	ServerDownDueToMySQLConnection                                                                            *Server
+	ServerUPWithMySQLSlaveStatusError, ServerUPWithMySQLThreadStatusError                                     *Server
 	ServerUP, ServerUPWithDelay, ServerUPWithHighThreadConnections, ServerUPWithDelayAndHighThreadConnections *Server
 	ServerUPWithHighRunningConnections                                                                        *Server
 )
@@ -28,51 +29,51 @@ func init() {
 		errors.New("__MYSQL_CONNECTION_ERROR__"), intNilHelper, intNilHelper, intNilHelper,
 	)
 
-	ServerDownDueToMySQLSlaveStatus = &Server{
-		name:   "ServerDownDueToMySQLSlaveStatus",
+	ServerUPWithMySQLSlaveStatusError = &Server{
+		name:   "ServerUPWithMySQLSlaveStatusError",
 		health: &ServerHealth{},
 	}
-	ServerDownDueToMySQLSlaveStatus.health.setDown(
+	ServerUPWithMySQLSlaveStatusError.health.setUP(
 		errors.New("__MYSQL_SLAVE_STATUS_ERROR__"), intNilHelper, intNilHelper, intNilHelper,
 	)
 
-	ServerDownDueToMySQLThreadStatus = &Server{
-		name:   "ServerDownDueToMySQLThreadStatus",
+	ServerUPWithMySQLThreadStatusError = &Server{
+		name:   "ServerUPWithMySQLThreadStatusError",
 		health: &ServerHealth{},
 	}
-	ServerDownDueToMySQLThreadStatus.health.setDown(
-		errors.New("__MYSQL_THREADS_STATUS_ERROR__"), &zeroHelper, intNilHelper, intNilHelper,
+	ServerUPWithMySQLThreadStatusError.health.setUP(
+		errors.New("__MYSQL_THREADS_STATUS_ERROR__"), intNilHelper, intNilHelper, intNilHelper,
 	)
 
 	ServerUP = &Server{
 		name:   "ServerUP",
 		health: &ServerHealth{},
 	}
-	ServerUP.health.setUP(&zeroHelper, &oneHelper, &oneHelper)
+	ServerUP.health.setUP(nil, &zeroHelper, &oneHelper, &oneHelper)
 
 	ServerUPWithDelay = &Server{
 		name:   "ServerUPWithDelay",
 		health: &ServerHealth{},
 	}
-	ServerUPWithDelay.health.setUP(&thousandHelper, &oneHelper, &oneHelper)
+	ServerUPWithDelay.health.setUP(nil, &thousandHelper, &oneHelper, &oneHelper)
 
 	ServerUPWithHighThreadConnections = &Server{
 		name:   "ServerUPWithHighThreadConnections",
 		health: &ServerHealth{},
 	}
-	ServerUPWithHighThreadConnections.health.setUP(&zeroHelper, &thousandHelper, &oneHelper)
+	ServerUPWithHighThreadConnections.health.setUP(nil, &zeroHelper, &thousandHelper, &oneHelper)
 
 	ServerUPWithDelayAndHighThreadConnections = &Server{
 		name:   "ServerUPWithDelayAndHighThreadConnections",
 		health: &ServerHealth{},
 	}
-	ServerUPWithDelayAndHighThreadConnections.health.setUP(&thousandHelper, &thousandHelper, &oneHelper)
+	ServerUPWithDelayAndHighThreadConnections.health.setUP(nil, &thousandHelper, &thousandHelper, &oneHelper)
 
 	ServerUPWithHighRunningConnections = &Server{
 		name:   "ServerUPWithHighRunningConnections",
 		health: &ServerHealth{},
 	}
-	ServerUPWithHighRunningConnections.health.setUP(&zeroHelper, &thousandHelper, &thousandHelper)
+	ServerUPWithHighRunningConnections.health.setUP(nil, &zeroHelper, &thousandHelper, &thousandHelper)
 }
 
 func TestBalancer(t *testing.T) {
@@ -86,18 +87,18 @@ func TestBalancer(t *testing.T) {
 			So(balancer.PickServer(), ShouldBeNil)
 		})
 
-		Convey("It fails when the server is down due to error acquiring slave status", func() {
+		Convey("It succeeds when the server is up due to error acquiring slave status", func() {
 			balancer := &Balancer{config: defaultConfig, servers: []*Server{
-				ServerDownDueToMySQLSlaveStatus,
+				ServerUPWithMySQLSlaveStatusError,
 			}}
-			So(balancer.PickServer(), ShouldBeNil)
+			So(balancer.PickServer(), ShouldPointTo, ServerUPWithMySQLSlaveStatusError)
 		})
 
-		Convey("It fails when the server is down due to error acquiring thread status", func() {
+		Convey("It succeeds when the server is up due to error acquiring thread status", func() {
 			balancer := &Balancer{config: defaultConfig, servers: []*Server{
-				ServerDownDueToMySQLThreadStatus,
+				ServerUPWithMySQLThreadStatusError,
 			}}
-			So(balancer.PickServer(), ShouldBeNil)
+			So(balancer.PickServer(), ShouldPointTo, ServerUPWithMySQLThreadStatusError)
 		})
 
 		Convey("It succeeds when the server is healthy", func() {
@@ -124,34 +125,34 @@ func TestBalancer(t *testing.T) {
 	})
 
 	Convey("Given a balancer with more than one server", t, func() {
-		Convey("It fails when all servers are down no matter the reason", func() {
+
+		Convey("It fails when all servers are down with connection problem", func() {
 			balancer := &Balancer{config: defaultConfig, servers: []*Server{
 				ServerDownDueToMySQLConnection,
-				ServerDownDueToMySQLSlaveStatus,
-				ServerDownDueToMySQLThreadStatus,
-			}}
-			So(balancer.PickServer(), ShouldBeNil)
-
-			balancer = &Balancer{config: defaultConfig, servers: []*Server{
-				ServerDownDueToMySQLConnection,
 				ServerDownDueToMySQLConnection,
 				ServerDownDueToMySQLConnection,
 			}}
 			So(balancer.PickServer(), ShouldBeNil)
+		})
 
-			balancer = &Balancer{config: defaultConfig, servers: []*Server{
-				ServerDownDueToMySQLSlaveStatus,
-				ServerDownDueToMySQLSlaveStatus,
-				ServerDownDueToMySQLSlaveStatus,
-			}}
-			So(balancer.PickServer(), ShouldBeNil)
+		Convey("It succeds when all servers are with slave errors but has connection available", func() {
 
-			balancer = &Balancer{config: defaultConfig, servers: []*Server{
-				ServerDownDueToMySQLThreadStatus,
-				ServerDownDueToMySQLThreadStatus,
-				ServerDownDueToMySQLThreadStatus,
-			}}
-			So(balancer.PickServer(), ShouldBeNil)
+			Convey("It succeds when one server has connection available", func() {
+				balancer := &Balancer{config: defaultConfig, servers: []*Server{
+					ServerDownDueToMySQLConnection,
+					ServerUPWithMySQLSlaveStatusError,
+				}}
+				So(balancer.PickServer(), ShouldPointTo, ServerUPWithMySQLSlaveStatusError)
+			})
+			Convey("It succeds when all server has connection available", func() {
+				balancer := &Balancer{config: defaultConfig, servers: []*Server{
+					ServerUPWithMySQLSlaveStatusError,
+					ServerUPWithMySQLThreadStatusError,
+				}}
+
+				So(balancer.PickServer(), ShouldNotBeNil)
+			})
+
 		})
 
 		Convey("In the case of one healthy slave", func() {
@@ -178,6 +179,13 @@ func TestBalancer(t *testing.T) {
 						ServerUP,
 					}}
 					So(balancer.PickServer(), ShouldPointTo, ServerUP)
+
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerDownDueToMySQLConnection,
+						ServerUPWithMySQLThreadStatusError,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUPWithMySQLThreadStatusError)
 				})
 			})
 
@@ -192,6 +200,7 @@ func TestBalancer(t *testing.T) {
 						ServerUPWithDelay,
 						ServerUPWithHighThreadConnections,
 						ServerUPWithDelayAndHighThreadConnections,
+						ServerUPWithMySQLThreadStatusError,
 					}}
 					So(balancer.PickServer(), ShouldPointTo, ServerUP)
 
@@ -202,6 +211,7 @@ func TestBalancer(t *testing.T) {
 						&ServerUP2,
 						ServerUP,
 						ServerUPWithDelayAndHighThreadConnections,
+						ServerUPWithMySQLThreadStatusError,
 					}}
 					So(balancer.PickServer(), ShouldPointTo, &ServerUP2)
 
@@ -210,6 +220,7 @@ func TestBalancer(t *testing.T) {
 						ServerUPWithDelay,
 						ServerUPWithHighThreadConnections,
 						ServerUPWithDelayAndHighThreadConnections,
+						ServerUPWithMySQLThreadStatusError,
 						ServerUP,
 						&ServerUP2,
 					}}
@@ -220,6 +231,7 @@ func TestBalancer(t *testing.T) {
 						ServerUPWithDelayAndHighThreadConnections,
 						ServerUPWithDelay,
 						ServerUPWithHighThreadConnections,
+						ServerUPWithMySQLThreadStatusError,
 					}}
 					So(balancer.PickServer(), ShouldPointTo, ServerUPWithHighThreadConnections)
 
@@ -227,6 +239,7 @@ func TestBalancer(t *testing.T) {
 						ServerDownDueToMySQLConnection,
 						ServerUPWithDelayAndHighThreadConnections,
 						ServerUPWithDelay,
+						ServerUPWithMySQLThreadStatusError,
 					}}
 					So(balancer.PickServer(), ShouldPointTo, ServerUPWithDelay)
 
@@ -240,6 +253,15 @@ func TestBalancer(t *testing.T) {
 						ServerDownDueToMySQLConnection,
 						ServerUPWithHighThreadConnections,
 						ServerUPWithHighRunningConnections,
+						ServerUPWithMySQLThreadStatusError,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUPWithHighThreadConnections)
+
+					balancer = &Balancer{config: defaultConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUPWithDelayAndHighThreadConnections,
+						ServerUPWithHighThreadConnections,
+						ServerUPWithMySQLThreadStatusError,
 					}}
 					So(balancer.PickServer(), ShouldPointTo, ServerUPWithHighThreadConnections)
 

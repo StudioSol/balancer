@@ -79,44 +79,23 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 		s.isChecking = false
 	}()
 
-	if err := s.connectIfNecessary(traceOn, logger); err != nil {
+	if err := s.connectReadUser(traceOn, logger); err != nil {
 		s.health.setDown(
 			err, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
 
-	slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger)
-	if err != nil {
-		s.health.setDown(
+	if err := s.connectReplicationUser(traceOn, logger); err != nil {
+		s.health.setUP(
 			err, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
-
-	rawSecondsBehindMaster := strings.TrimSpace(slaveStatusResult["Seconds_Behind_Master"])
-	if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
-		s.health.setDown(
-			fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
-			secondsBehindMaster, openConnections, runningConnections,
-		)
-		return
-	}
-
-	tmp, err := strconv.Atoi(rawSecondsBehindMaster)
-	if err != nil {
-		s.health.setDown(
-			fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
-			secondsBehindMaster, openConnections, runningConnections,
-		)
-		return
-	}
-
-	secondsBehindMaster = &tmp
 
 	threadsConnectedResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_connected'", logger)
 	if err != nil {
-		s.health.setDown(
+		s.health.setUP(
 			fmt.Errorf("failed acquiring MySQL thread connected status:  %s", err),
 			secondsBehindMaster, openConnections, runningConnections,
 		)
@@ -126,7 +105,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	threadsConnected := threadsConnectedResult["Value"]
 	tmp2, err := strconv.Atoi(threadsConnected)
 	if err != nil {
-		s.health.setDown(
+		s.health.setUP(
 			fmt.Errorf("unexpected value for Threads_connected returned from MySQL:  %s", err),
 			secondsBehindMaster, openConnections, runningConnections,
 		)
@@ -137,7 +116,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 
 	threadsRunningResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_running'", logger)
 	if err != nil {
-		s.health.setDown(
+		s.health.setUP(
 			fmt.Errorf("failed acquiring MySQL thread running status:  %s", err),
 			secondsBehindMaster, openConnections, runningConnections,
 		)
@@ -147,7 +126,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	threadsRunning := threadsRunningResult["Value"]
 	tmp3, err := strconv.Atoi(threadsRunning)
 	if err != nil {
-		s.health.setDown(
+		s.health.setUP(
 			fmt.Errorf("unexpected value for Threads_running returned from MySQL:  %s", err),
 			secondsBehindMaster, openConnections, runningConnections,
 		)
@@ -156,10 +135,38 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 
 	runningConnections = &tmp3
 
-	s.health.setUP(secondsBehindMaster, openConnections, runningConnections)
+	slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger)
+	if err != nil {
+		s.health.setUP(
+			err, secondsBehindMaster, openConnections, runningConnections,
+		)
+		return
+	}
+
+	rawSecondsBehindMaster := strings.TrimSpace(slaveStatusResult["Seconds_Behind_Master"])
+	if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
+		s.health.setUP(
+			fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
+			secondsBehindMaster, openConnections, runningConnections,
+		)
+		return
+	}
+
+	tmp, err := strconv.Atoi(rawSecondsBehindMaster)
+	if err != nil {
+		s.health.setUP(
+			fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
+			secondsBehindMaster, openConnections, runningConnections,
+		)
+		return
+	}
+
+	secondsBehindMaster = &tmp
+
+	s.health.setUP(nil, secondsBehindMaster, openConnections, runningConnections)
 }
 
-func (s *Server) connectIfNecessary(traceOn bool, logger Logger) error {
+func (s *Server) connectReadUser(traceOn bool, logger Logger) error {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -170,6 +177,13 @@ func (s *Server) connectIfNecessary(traceOn bool, logger Logger) error {
 		}
 		s.connection = conn
 	}
+
+	return nil
+}
+
+func (s *Server) connectReplicationUser(traceOn bool, logger Logger) error {
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	if s.replicationConnection == nil {
 		conn, err := s.connect(s.serverSettings.ReplicationDSN, traceOn, logger)

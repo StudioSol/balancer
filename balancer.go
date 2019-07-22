@@ -13,12 +13,16 @@ type bySecondsBehindMaster Servers
 func (a bySecondsBehindMaster) Len() int      { return len(a) }
 func (a bySecondsBehindMaster) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a bySecondsBehindMaster) Less(i, j int) bool {
+	if a[i].health.secondsBehindMaster == nil && a[j].health.secondsBehindMaster == nil {
+		return false
+	}
 	if a[i].health.secondsBehindMaster == nil && a[j].health.secondsBehindMaster != nil {
 		return false
 	}
 	if a[i].health.secondsBehindMaster != nil && a[j].health.secondsBehindMaster == nil {
 		return true
 	}
+
 	return *a[i].health.secondsBehindMaster < *a[j].health.secondsBehindMaster
 }
 
@@ -27,7 +31,6 @@ type byConnections Servers
 func (a byConnections) Len() int      { return len(a) }
 func (a byConnections) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a byConnections) Less(i, j int) bool {
-
 	if a[i].health.runningConnections == nil && a[j].health.runningConnections != nil {
 		return false
 	}
@@ -37,6 +40,9 @@ func (a byConnections) Less(i, j int) bool {
 
 	if a[i].health.runningConnections == a[j].health.runningConnections {
 
+		if a[i].health.openConnections == nil && a[j].health.openConnections == nil {
+			return false
+		}
 		if a[i].health.openConnections == nil && a[j].health.openConnections != nil {
 			return false
 		}
