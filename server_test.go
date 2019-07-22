@@ -51,14 +51,15 @@ func getMock(t *testing.T) (*gorp.DbMap, sqlmock.Sqlmock) {
 func mockHealthQueries(t *testing.T, mock sqlmock.Sqlmock, secondsBehindMaster, openConnections, runningConnections driver.Value) {
 	t.Helper()
 
-	mock.ExpectQuery("SHOW SLAVE STATUS").WillReturnRows(
-		sqlmock.NewRows([]string{"Seconds_Behind_Master"}).AddRow(secondsBehindMaster))
-
 	mock.ExpectQuery("SHOW STATUS LIKE 'Threads_connected'").WillReturnRows(
 		sqlmock.NewRows([]string{"Value"}).AddRow(openConnections))
 
 	mock.ExpectQuery("SHOW STATUS LIKE 'Threads_running'").WillReturnRows(
 		sqlmock.NewRows([]string{"Value"}).AddRow(runningConnections))
+
+	mock.ExpectQuery("SHOW SLAVE STATUS").WillReturnRows(
+		sqlmock.NewRows([]string{"Seconds_Behind_Master"}).AddRow(secondsBehindMaster))
+
 }
 
 func TestServerAttributes(t *testing.T) {
@@ -154,7 +155,6 @@ func TestCheckHealth(t *testing.T) {
 		db, mock := getMock(t)
 		logger := newLoggerMock()
 		health := new(ServerHealth)
-
 		server := Server{
 			connection:            db,
 			replicationConnection: db,
@@ -166,6 +166,8 @@ func TestCheckHealth(t *testing.T) {
 
 			Convey("It should succeed without errors", func() {
 				server.CheckHealth(false, logger)
+
+				So(health.up, ShouldBeTrue)
 
 				So(health.runningConnections, ShouldNotBeNil)
 				So(*health.runningConnections, ShouldEqual, 1)
@@ -183,9 +185,10 @@ func TestCheckHealth(t *testing.T) {
 		Convey("When slave status are empty", func() {
 			mockHealthQueries(t, mock, nil, 2, 1)
 
-			Convey("It should set health down", func() {
+			Convey("It should set error on check", func() {
 				server.CheckHealth(false, logger)
 
+				So(health.up, ShouldBeTrue)
 				So(health.err, ShouldNotBeNil)
 				So(health.err.Error(), ShouldContainSubstring, "empty or null value for Seconds_Behind_Master")
 
@@ -196,9 +199,10 @@ func TestCheckHealth(t *testing.T) {
 		Convey("When openConnections are empty", func() {
 			mockHealthQueries(t, mock, 0, nil, 1)
 
-			Convey("It should set health down", func() {
+			Convey("It should set error on check", func() {
 				server.CheckHealth(false, logger)
 
+				So(health.up, ShouldBeTrue)
 				So(health.err, ShouldNotBeNil)
 				So(health.err.Error(), ShouldContainSubstring, "unexpected value for Threads_connected")
 
@@ -209,9 +213,9 @@ func TestCheckHealth(t *testing.T) {
 		Convey("When runningConnections are empty", func() {
 			mockHealthQueries(t, mock, 0, 1, nil)
 
-			Convey("It should set health down", func() {
+			Convey("It should set error on check", func() {
 				server.CheckHealth(false, logger)
-
+				So(health.up, ShouldBeTrue)
 				So(health.err, ShouldNotBeNil)
 				So(health.err.Error(), ShouldContainSubstring, "unexpected value for Threads_running")
 
@@ -219,4 +223,50 @@ func TestCheckHealth(t *testing.T) {
 			})
 		})
 	})
+
+	Convey("Given a invalid server", t, func() {
+		logger := newLoggerMock()
+		health := new(ServerHealth)
+		server := Server{
+			connection:            nil,
+			replicationConnection: nil,
+			health:                health,
+		}
+
+		Convey("When slave connection is nil", func() {
+
+			Convey("It should fail with server down and errors", func() {
+				server.CheckHealth(false, logger)
+
+				So(health.up, ShouldBeFalse)
+				So(health.err, ShouldNotBeNil)
+
+			})
+		})
+
+	})
+
+	Convey("Given a valid server without replication connection", t, func() {
+		db, _ := getMock(t)
+		logger := newLoggerMock()
+		health := new(ServerHealth)
+		server := Server{
+			connection:            db,
+			replicationConnection: nil,
+			health:                health,
+		}
+
+		Convey("When slave connection is nil", func() {
+
+			Convey("It should succeed with server down and errors", func() {
+				server.CheckHealth(false, logger)
+
+				So(health.up, ShouldBeTrue)
+				So(health.err, ShouldNotBeNil)
+
+			})
+		})
+
+	})
+
 }
