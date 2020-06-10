@@ -16,6 +16,7 @@ func TestHealthAttributes(t *testing.T) {
 			openConnections:     &[]int{1}[0],
 			runningConnections:  &[]int{2}[0],
 			secondsBehindMaster: &[]int{3}[0],
+			ioRunning:           true,
 		}
 
 		Convey("It should return correct values", func() {
@@ -23,6 +24,7 @@ func TestHealthAttributes(t *testing.T) {
 			So(*health.GetOpenConnections(), ShouldEqual, 1)
 			So(*health.GetRunningConnections(), ShouldEqual, 2)
 			So(*health.GetSecondsBehindMaster(), ShouldEqual, 3)
+			So(health.IORunning(), ShouldBeTrue)
 		})
 	})
 }
