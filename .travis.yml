@@ -1,9 +1,9 @@
 language: go
 go:
-- 1.12
+- 1.14
 go_import_path: github.com/StudioSol/balancer
 install:
-  - make upgrade
+  - make deps
 script:
   - make test
 after_success:

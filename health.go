@@ -11,6 +11,7 @@ type ServerHealth struct {
 
 	up         bool
 	err        error
+	ioRunning  bool
 	lastUpdate time.Time
 
 	secondsBehindMaster *int
@@ -45,10 +46,16 @@ func (h *ServerHealth) GetRunningConnections() *int {
 	return h.runningConnections
 }
 
-func (h *ServerHealth) setStatus(up bool, err error, secondsBehindMaster, openConnections, runningConnections *int) {
+// GetSlaveRunning returns the IO status from slave
+func (h *ServerHealth) IORunning() bool {
+	return h.ioRunning
+}
+
+func (h *ServerHealth) setStatus(up, ioRunning bool, err error, secondsBehindMaster, openConnections, runningConnections *int) {
 	h.Lock()
 	defer h.Unlock()
 	h.up = up
+	h.ioRunning = ioRunning
 	h.err = err
 	h.secondsBehindMaster = secondsBehindMaster
 	h.openConnections = openConnections
@@ -56,10 +63,10 @@ func (h *ServerHealth) setStatus(up bool, err error, secondsBehindMaster, openCo
 	h.lastUpdate = time.Now()
 }
 
-func (h *ServerHealth) setUP(err error, secondsBehindMaster, openConnections, runningConnections *int) {
-	h.setStatus(true, err, secondsBehindMaster, openConnections, runningConnections)
+func (h *ServerHealth) setUP(err error, ioRunning bool, secondsBehindMaster, openConnections, runningConnections *int) {
+	h.setStatus(true, ioRunning, err, secondsBehindMaster, openConnections, runningConnections)
 }
 
-func (h *ServerHealth) setDown(err error, secondsBehindMaster, openConnections, runningConnections *int) {
-	h.setStatus(false, err, secondsBehindMaster, openConnections, runningConnections)
+func (h *ServerHealth) setDown(err error, ioRunning bool, secondsBehindMaster, openConnections, runningConnections *int) {
+	h.setStatus(false, ioRunning, err, secondsBehindMaster, openConnections, runningConnections)
 }

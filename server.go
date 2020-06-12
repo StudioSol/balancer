@@ -81,23 +81,29 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 
 	if err := s.connectReadUser(traceOn, logger); err != nil {
 		s.health.setDown(
-			err, secondsBehindMaster, openConnections, runningConnections,
+			err, false, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
 
 	if err := s.connectReplicationUser(traceOn, logger); err != nil {
 		s.health.setUP(
-			err, secondsBehindMaster, openConnections, runningConnections,
+			err, false, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
+	}
+
+	ioRunning := false
+	ioRunningResult, err := s.rawQuery("SHOW STATUS LIKE 'Slave_running'", logger)
+	if err == nil && strings.EqualFold(ioRunningResult["Value"], "ON") {
+		ioRunning = true
 	}
 
 	threadsConnectedResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_connected'", logger)
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("failed acquiring MySQL thread connected status:  %s", err),
-			secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
@@ -107,7 +113,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("unexpected value for Threads_connected returned from MySQL:  %s", err),
-			secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
@@ -118,7 +124,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("failed acquiring MySQL thread running status:  %s", err),
-			secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
@@ -128,7 +134,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("unexpected value for Threads_running returned from MySQL:  %s", err),
-			secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
@@ -138,7 +144,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger)
 	if err != nil {
 		s.health.setUP(
-			err, secondsBehindMaster, openConnections, runningConnections,
+			err, ioRunning, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
@@ -147,7 +153,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
 		s.health.setUP(
 			fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
-			secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
@@ -156,14 +162,14 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
-			secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, secondsBehindMaster, openConnections, runningConnections,
 		)
 		return
 	}
 
 	secondsBehindMaster = &tmp
 
-	s.health.setUP(nil, secondsBehindMaster, openConnections, runningConnections)
+	s.health.setUP(nil, ioRunning, secondsBehindMaster, openConnections, runningConnections)
 }
 
 func (s *Server) connectReadUser(traceOn bool, logger Logger) error {

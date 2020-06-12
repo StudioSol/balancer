@@ -8,9 +8,7 @@ build:
 clean: 
 	go clean
 deps: 
-	go build -v ./...
-upgrade: 
-	go get -u
+	go mod download
 test:
 	echo "" > coverage.txt
 	for d in $(shell go list ./...); do \
