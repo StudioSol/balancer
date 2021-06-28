@@ -15,3 +15,4 @@ test:
 		go test -race -v -coverprofile=profile.out -covermode=atomic $$d || exit 1; \
 		[ -f profile.out ] && cat profile.out >> coverage.txt && rm profile.out; \
 	done
+	cat coverage.txt
