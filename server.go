@@ -14,6 +14,7 @@ var mutex sync.Mutex
 
 // Server server representation
 type Server struct {
+	sync.RWMutex
 	name                  string
 	health                *ServerHealth
 	serverSettings        ServerSettings
@@ -70,13 +71,22 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	var secondsBehindMaster, openConnections, runningConnections *int
 
 	// prevent concurrently checks on same server (slow queries/network)
-	if s.isChecking {
+	s.RLock()
+	checking := s.isChecking
+	s.RUnlock()
+
+	if checking {
 		return
 	}
 
+	s.Lock()
 	s.isChecking = true
+	s.Unlock()
+
 	defer func() {
+		s.Lock()
 		s.isChecking = false
+		s.Unlock()
 	}()
 
 	if err := s.connectReadUser(traceOn, logger); err != nil {
