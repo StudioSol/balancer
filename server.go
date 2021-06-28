@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/go-gorp/gorp"
 )
@@ -14,14 +15,13 @@ var mutex sync.Mutex
 
 // Server server representation
 type Server struct {
-	sync.RWMutex
 	name                  string
 	health                *ServerHealth
 	serverSettings        ServerSettings
 	connection            *gorp.DbMap
 	replicationConnection *gorp.DbMap
 	traceOn               bool
-	isChecking            bool
+	isChecking            int32
 }
 
 // GetName returns server's name
@@ -71,22 +71,13 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	var secondsBehindMaster, openConnections, runningConnections *int
 
 	// prevent concurrently checks on same server (slow queries/network)
-	s.RLock()
-	checking := s.isChecking
-	s.RUnlock()
-
-	if checking {
+	if atomic.LoadInt32(&s.isChecking) == 1 {
 		return
 	}
 
-	s.Lock()
-	s.isChecking = true
-	s.Unlock()
-
+	atomic.StoreInt32(&s.isChecking, 1)
 	defer func() {
-		s.Lock()
-		s.isChecking = false
-		s.Unlock()
+		atomic.StoreInt32(&s.isChecking, 0)
 	}()
 
 	if err := s.connectReadUser(traceOn, logger); err != nil {
