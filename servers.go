@@ -44,3 +44,21 @@ func (s Servers) filterBySecondsBehindMaster() Servers {
 	sort.Sort(bySecondsBehindMaster(filteredServers))
 	return filteredServers
 }
+
+func (s Servers) filterByWriteSetStatus() Servers {
+	var filteredServers Servers
+
+	for i := 0; i < len(s); i++ {
+		if !s[i].health.IORunning() || !s[i].health.GetWriteSetReady() {
+			continue
+		}
+
+		if state := s[i].health.GetWriteSetReplicationState(); state != nil && *state != WriteSetStateSync || state == nil {
+			continue
+		}
+
+		filteredServers = append(filteredServers, s[i])
+	}
+
+	return filteredServers
+}

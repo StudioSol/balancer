@@ -22,6 +22,7 @@ type Server struct {
 	replicationConnection *gorp.DbMap
 	traceOn               bool
 	isChecking            int32
+	replicationMode       ReplicationMode
 }
 
 // GetName returns server's name
@@ -68,7 +69,7 @@ func (s *Server) connect(dsn string, traceOn bool, logger Logger) (*gorp.DbMap, 
 
 // CheckHealth check server's health and set it's state
 func (s *Server) CheckHealth(traceOn bool, logger Logger) {
-	var secondsBehindMaster, openConnections, runningConnections *int
+	var secondsBehindMaster, openConnections, runningConnections, wsrepLocalState *int
 
 	// prevent concurrently checks on same server (slow queries/network)
 	if atomic.LoadInt32(&s.isChecking) == 1 {
@@ -82,29 +83,41 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 
 	if err := s.connectReadUser(traceOn, logger); err != nil {
 		s.health.setDown(
-			err, false, secondsBehindMaster, openConnections, runningConnections,
+			err, false, false, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
 		)
 		return
 	}
 
 	if err := s.connectReplicationUser(traceOn, logger); err != nil {
 		s.health.setUP(
-			err, false, secondsBehindMaster, openConnections, runningConnections,
+			err, false, false, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
 		)
 		return
 	}
 
 	ioRunning := false
-	ioRunningResult, err := s.rawQuery("SHOW STATUS LIKE 'Slave_running'", logger)
-	if err == nil && strings.EqualFold(ioRunningResult["Value"], "ON") {
-		ioRunning = true
+	wsrepReady := false
+	if s.replicationMode == ReplicationModeSingleSource {
+		ioRunningResult, err := s.rawQuery("SHOW STATUS LIKE 'Slave_running'", logger)
+		if err == nil && strings.EqualFold(ioRunningResult["Value"], "ON") {
+			ioRunning = true
+		}
+	} else if s.replicationMode == ReplicationModeMultiSourceWriteSet {
+		ioRunningResult, err := s.rawQuery("SHOW STATUS LIKE 'wsrep_connected'", logger)
+		if err == nil && strings.EqualFold(ioRunningResult["Value"], "ON") {
+			ioRunning = true
+		}
+		readyResult, err := s.rawQuery("SHOW STATUS LIKE 'wsrep_ready'", logger)
+		if err == nil && strings.EqualFold(readyResult["Value"], "ON") {
+			wsrepReady = true
+		}
 	}
 
 	threadsConnectedResult, err := s.rawQuery("SHOW STATUS LIKE 'Threads_connected'", logger)
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("failed acquiring MySQL thread connected status:  %s", err),
-			ioRunning, secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
 		)
 		return
 	}
@@ -114,7 +127,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("unexpected value for Threads_connected returned from MySQL:  %s", err),
-			ioRunning, secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
 		)
 		return
 	}
@@ -125,7 +138,7 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("failed acquiring MySQL thread running status:  %s", err),
-			ioRunning, secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
 		)
 		return
 	}
@@ -135,42 +148,64 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 	if err != nil {
 		s.health.setUP(
 			fmt.Errorf("unexpected value for Threads_running returned from MySQL:  %s", err),
-			ioRunning, secondsBehindMaster, openConnections, runningConnections,
+			ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
 		)
 		return
 	}
 
 	runningConnections = &tmp3
 
-	slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger)
-	if err != nil {
-		s.health.setUP(
-			err, ioRunning, secondsBehindMaster, openConnections, runningConnections,
-		)
-		return
+	if s.replicationMode == ReplicationModeSingleSource {
+		slaveStatusResult, err := s.rawQuery("SHOW SLAVE STATUS", logger)
+		if err != nil {
+			s.health.setUP(
+				err, ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
+			)
+			return
+		}
+		rawSecondsBehindMaster := strings.TrimSpace(slaveStatusResult["Seconds_Behind_Master"])
+		if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
+			s.health.setUP(
+				fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
+				ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
+			)
+			return
+		}
+
+		tmp, err := strconv.Atoi(rawSecondsBehindMaster)
+		if err != nil {
+			s.health.setUP(
+				fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
+				ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
+			)
+			return
+		}
+
+		secondsBehindMaster = &tmp
+	} else if s.replicationMode == ReplicationModeMultiSourceWriteSet {
+		writesetStateResult, err := s.rawQuery("SHOW STATUS LIKE 'wsrep_local_state'", logger)
+		if err != nil {
+			s.health.setUP(
+				fmt.Errorf("failed acquiring MySQL wsrep_local_state:  %s", err),
+				ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
+			)
+			return
+		}
+
+		writesetState := writesetStateResult["Value"]
+		tmp, err := strconv.Atoi(writesetState)
+		if err != nil {
+			s.health.setUP(
+				fmt.Errorf("unexpected value for wsrep_local_state returned from MySQL:  %s", err),
+				ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState,
+			)
+			return
+		}
+
+		wsrepLocalState = &tmp
 	}
 
-	rawSecondsBehindMaster := strings.TrimSpace(slaveStatusResult["Seconds_Behind_Master"])
-	if rawSecondsBehindMaster == "" || strings.ToLower(rawSecondsBehindMaster) == "null" {
-		s.health.setUP(
-			fmt.Errorf("empty or null value for Seconds_Behind_Master returned from MySQL: %s", err),
-			ioRunning, secondsBehindMaster, openConnections, runningConnections,
-		)
-		return
-	}
-
-	tmp, err := strconv.Atoi(rawSecondsBehindMaster)
-	if err != nil {
-		s.health.setUP(
-			fmt.Errorf("unexpected value for Seconds_Behind_Master returned from MySQL (conversion error): %s", err),
-			ioRunning, secondsBehindMaster, openConnections, runningConnections,
-		)
-		return
-	}
-
-	secondsBehindMaster = &tmp
-
-	s.health.setUP(nil, ioRunning, secondsBehindMaster, openConnections, runningConnections)
+	s.health.setUP(nil, ioRunning, wsrepReady, secondsBehindMaster, openConnections, runningConnections, wsrepLocalState)
 }
 
 func (s *Server) connectReadUser(traceOn bool, logger Logger) error {

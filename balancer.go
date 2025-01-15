@@ -127,12 +127,21 @@ func (b *Balancer) PickServer() *Server {
 		return candidates[0]
 	}
 
-	candidates = candidates.filterBySecondsBehindMaster()
+	if b.config.ReplicationMode == ReplicationModeMultiSourceWriteSet {
+		candidates = candidates.filterByWriteSetStatus()
+	} else {
+		candidates = candidates.filterBySecondsBehindMaster()
+	}
+
 	switch len(candidates) {
 	case 0:
 		candidates = b.serversUP()
 	case 1:
 		return candidates[0]
+	}
+
+	if len(candidates) == 0 {
+		return nil
 	}
 
 	sort.Sort(byConnections(candidates))
@@ -154,6 +163,7 @@ func New(config *Config) *Balancer {
 			health: &ServerHealth{
 				lastUpdate: time.Now(),
 			},
+			replicationMode: config.ReplicationMode,
 		}
 	}
 
