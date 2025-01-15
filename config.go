@@ -4,6 +4,13 @@ import (
 	"time"
 )
 
+type ReplicationMode int
+
+const (
+	ReplicationModeSingleSource ReplicationMode = iota
+	ReplicationModeMultiSourceWriteSet
+)
+
 // Config configuration options for the balancer
 type Config struct {
 	CheckInterval   int64
@@ -12,6 +19,7 @@ type Config struct {
 	Logger          Logger
 	ServersSettings []ServerSettings
 	StartupWait     time.Duration
+	ReplicationMode ReplicationMode
 }
 
 // ServerSettings servers' configuration options

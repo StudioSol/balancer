@@ -62,6 +62,27 @@ func mockHealthQueries(t *testing.T, mock sqlmock.Sqlmock, ioStatus, secondsBehi
 
 	mock.ExpectQuery("SHOW SLAVE STATUS").WillReturnRows(
 		sqlmock.NewRows([]string{"Seconds_Behind_Master"}).AddRow(secondsBehindMaster))
+
+}
+
+func mockHealthQueriesWriteSet(t *testing.T, mock sqlmock.Sqlmock, wsrepConnected, wsrepReady, openConnections, runningConnections, wsrepState driver.Value) {
+	t.Helper()
+
+	mock.ExpectQuery("SHOW STATUS LIKE 'wsrep_connected'").WillReturnRows(
+		sqlmock.NewRows([]string{"Value"}).AddRow(wsrepConnected))
+
+	mock.ExpectQuery("SHOW STATUS LIKE 'wsrep_ready'").WillReturnRows(
+		sqlmock.NewRows([]string{"Value"}).AddRow(wsrepReady))
+
+	mock.ExpectQuery("SHOW STATUS LIKE 'Threads_connected'").WillReturnRows(
+		sqlmock.NewRows([]string{"Value"}).AddRow(openConnections))
+
+	mock.ExpectQuery("SHOW STATUS LIKE 'Threads_running'").WillReturnRows(
+		sqlmock.NewRows([]string{"Value"}).AddRow(runningConnections))
+
+	mock.ExpectQuery("SHOW STATUS LIKE 'wsrep_local_state'").WillReturnRows(
+		sqlmock.NewRows([]string{"Value"}).AddRow(wsrepState))
+
 }
 
 func TestServerAttributes(t *testing.T) {
@@ -153,7 +174,7 @@ func TestRawQuery(t *testing.T) {
 }
 
 func TestCheckHealth(t *testing.T) {
-	Convey("Given a valid server", t, func() {
+	Convey("Given a valid server using master-replicas replication (SingleSource)", t, func() {
 		db, mock := getMock(t)
 		logger := newLoggerMock()
 		health := new(ServerHealth)
@@ -161,6 +182,7 @@ func TestCheckHealth(t *testing.T) {
 			connection:            db,
 			replicationConnection: db,
 			health:                health,
+			replicationMode:       ReplicationModeSingleSource,
 		}
 
 		Convey("When everything is ok", func() {
@@ -171,6 +193,9 @@ func TestCheckHealth(t *testing.T) {
 
 				So(health.up, ShouldBeTrue)
 				So(health.ioRunning, ShouldBeTrue)
+
+				So(health.wsrepReady, ShouldBeFalse)
+				So(health.wsrepLocalState, ShouldBeNil)
 
 				So(health.runningConnections, ShouldNotBeNil)
 				So(*health.runningConnections, ShouldEqual, 1)
@@ -228,6 +253,97 @@ func TestCheckHealth(t *testing.T) {
 
 		Convey("When IO is not running", func() {
 			mockHealthQueries(t, mock, "OFF", 0, 1, 1)
+
+			Convey("It should set io running false", func() {
+				server.CheckHealth(false, logger)
+				So(health.up, ShouldBeTrue)
+				So(health.err, ShouldBeNil)
+				So(health.ioRunning, ShouldBeFalse)
+
+				mock.ExpectationsWereMet()
+			})
+		})
+	})
+
+	Convey("Given a valid server using master-master replication using wsrep (MultiSourceWriteSet)", t, func() {
+		db, mock := getMock(t)
+		logger := newLoggerMock()
+		health := new(ServerHealth)
+		server := Server{
+			connection:            db,
+			replicationConnection: db,
+			health:                health,
+			replicationMode:       ReplicationModeMultiSourceWriteSet,
+		}
+
+		Convey("When everything is ok", func() {
+			mockHealthQueriesWriteSet(t, mock, "ON", "ON", 2, 1, 4)
+
+			Convey("It should succeed without errors", func() {
+				server.CheckHealth(false, logger)
+
+				So(health.up, ShouldBeTrue)
+				So(health.ioRunning, ShouldBeTrue)
+
+				So(health.wsrepReady, ShouldBeTrue)
+				So(health.wsrepLocalState, ShouldNotBeNil)
+				So(*health.wsrepLocalState, ShouldEqual, 4)
+
+				So(health.runningConnections, ShouldNotBeNil)
+				So(*health.runningConnections, ShouldEqual, 1)
+
+				So(health.openConnections, ShouldNotBeNil)
+				So(*health.openConnections, ShouldEqual, 2)
+
+				So(health.secondsBehindMaster, ShouldBeNil)
+
+				So(mock.ExpectationsWereMet(), ShouldBeNil)
+			})
+		})
+
+		Convey("When replication status are empty", func() {
+			mockHealthQueriesWriteSet(t, mock, "ON", "ON", 2, 1, nil)
+
+			Convey("It should set error on check", func() {
+				server.CheckHealth(false, logger)
+
+				So(health.up, ShouldBeTrue)
+				So(health.err, ShouldNotBeNil)
+				So(health.err.Error(), ShouldContainSubstring, "unexpected value for wsrep_local_state")
+
+				mock.ExpectationsWereMet()
+			})
+		})
+
+		Convey("When openConnections are empty", func() {
+			mockHealthQueriesWriteSet(t, mock, "ON", "ON", nil, 1, 4)
+
+			Convey("It should set error on check", func() {
+				server.CheckHealth(false, logger)
+
+				So(health.up, ShouldBeTrue)
+				So(health.err, ShouldNotBeNil)
+				So(health.err.Error(), ShouldContainSubstring, "unexpected value for Threads_connected")
+
+				mock.ExpectationsWereMet()
+			})
+		})
+
+		Convey("When runningConnections are empty", func() {
+			mockHealthQueriesWriteSet(t, mock, "ON", "ON", 1, nil, 4)
+
+			Convey("It should set error on check", func() {
+				server.CheckHealth(false, logger)
+				So(health.up, ShouldBeTrue)
+				So(health.err, ShouldNotBeNil)
+				So(health.err.Error(), ShouldContainSubstring, "unexpected value for Threads_running")
+
+				mock.ExpectationsWereMet()
+			})
+		})
+
+		Convey("When IO is not running", func() {
+			mockHealthQueriesWriteSet(t, mock, "OFF", "ON", 2, 1, 4)
 
 			Convey("It should set io running false", func() {
 				server.CheckHealth(false, logger)

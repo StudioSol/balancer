@@ -12,13 +12,15 @@ var (
 	ServerDownDueToMySQLConnection                                                                            *Server
 	ServerUPWithMySQLSlaveStatusError, ServerUPWithMySQLThreadStatusError                                     *Server
 	ServerUP, ServerUPWithDelay, ServerUPWithHighThreadConnections, ServerUPWithDelayAndHighThreadConnections *Server
-	ServerUPWithHighRunningConnections                                                                        *Server
+	ServerUPWithHighRunningConnections, ServerUPWithNoSync                                                    *Server
 )
 
 func init() {
 	var intNilHelper *int
 	zeroHelper := 0
 	oneHelper := 1
+	wsrepState := WriteSetStateSync
+	wsrepStateNoSync := 2
 	thousandHelper := 1000
 
 	ServerDownDueToMySQLConnection = &Server{
@@ -26,7 +28,7 @@ func init() {
 		health: &ServerHealth{},
 	}
 	ServerDownDueToMySQLConnection.health.setDown(
-		errors.New("__MYSQL_CONNECTION_ERROR__"), false, intNilHelper, intNilHelper, intNilHelper,
+		errors.New("__MYSQL_CONNECTION_ERROR__"), false, false, intNilHelper, intNilHelper, intNilHelper, intNilHelper,
 	)
 
 	ServerUPWithMySQLSlaveStatusError = &Server{
@@ -34,7 +36,7 @@ func init() {
 		health: &ServerHealth{},
 	}
 	ServerUPWithMySQLSlaveStatusError.health.setUP(
-		errors.New("__MYSQL_SLAVE_STATUS_ERROR__"), false, intNilHelper, intNilHelper, intNilHelper,
+		errors.New("__MYSQL_SLAVE_STATUS_ERROR__"), false, false, intNilHelper, intNilHelper, intNilHelper, intNilHelper,
 	)
 
 	ServerUPWithMySQLThreadStatusError = &Server{
@@ -42,43 +44,49 @@ func init() {
 		health: &ServerHealth{},
 	}
 	ServerUPWithMySQLThreadStatusError.health.setUP(
-		errors.New("__MYSQL_THREADS_STATUS_ERROR__"), false, intNilHelper, intNilHelper, intNilHelper,
+		errors.New("__MYSQL_THREADS_STATUS_ERROR__"), false, false, intNilHelper, intNilHelper, intNilHelper, intNilHelper,
 	)
 
 	ServerUP = &Server{
 		name:   "ServerUP",
 		health: &ServerHealth{},
 	}
-	ServerUP.health.setUP(nil, true, &zeroHelper, &oneHelper, &oneHelper)
+	ServerUP.health.setUP(nil, true, true, &zeroHelper, &oneHelper, &oneHelper, &wsrepState)
 
 	ServerUPWithDelay = &Server{
 		name:   "ServerUPWithDelay",
 		health: &ServerHealth{},
 	}
-	ServerUPWithDelay.health.setUP(nil, true, &thousandHelper, &oneHelper, &oneHelper)
+	ServerUPWithDelay.health.setUP(nil, true, true, &thousandHelper, &oneHelper, &oneHelper, &wsrepState)
+
+	ServerUPWithNoSync = &Server{
+		name:   "ServerUPWithNoSync",
+		health: &ServerHealth{},
+	}
+	ServerUPWithNoSync.health.setUP(nil, true, true, &thousandHelper, &oneHelper, &oneHelper, &wsrepStateNoSync)
 
 	ServerUPWithHighThreadConnections = &Server{
 		name:   "ServerUPWithHighThreadConnections",
 		health: &ServerHealth{},
 	}
-	ServerUPWithHighThreadConnections.health.setUP(nil, true, &zeroHelper, &thousandHelper, &oneHelper)
+	ServerUPWithHighThreadConnections.health.setUP(nil, true, true, &zeroHelper, &thousandHelper, &oneHelper, &wsrepState)
 
 	ServerUPWithDelayAndHighThreadConnections = &Server{
 		name:   "ServerUPWithDelayAndHighThreadConnections",
 		health: &ServerHealth{},
 	}
-	ServerUPWithDelayAndHighThreadConnections.health.setUP(nil, true, &thousandHelper, &thousandHelper, &oneHelper)
+	ServerUPWithDelayAndHighThreadConnections.health.setUP(nil, true, true, &thousandHelper, &thousandHelper, &oneHelper, &wsrepState)
 
 	ServerUPWithHighRunningConnections = &Server{
 		name:   "ServerUPWithHighRunningConnections",
 		health: &ServerHealth{},
 	}
-	ServerUPWithHighRunningConnections.health.setUP(nil, true, &zeroHelper, &thousandHelper, &thousandHelper)
+	ServerUPWithHighRunningConnections.health.setUP(nil, true, true, &zeroHelper, &thousandHelper, &thousandHelper, &wsrepState)
 }
 
 func TestBalancer(t *testing.T) {
 	defaultConfig := &Config{}
-
+	wsrepConfig := &Config{ReplicationMode: ReplicationModeMultiSourceWriteSet}
 	Convey("Given a balancer with only one server", t, func() {
 		Convey("It fails when the server is down due to error acquiring connection", func() {
 			balancer := &Balancer{config: defaultConfig, servers: []*Server{
@@ -265,6 +273,35 @@ func TestBalancer(t *testing.T) {
 					}}
 					So(balancer.PickServer(), ShouldPointTo, ServerUPWithHighThreadConnections)
 
+					balancer = &Balancer{config: wsrepConfig, servers: []*Server{
+						ServerDownDueToMySQLConnection,
+						ServerUPWithNoSync,
+						ServerUP,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUP)
+
+					balancer = &Balancer{config: wsrepConfig, servers: []*Server{
+						ServerUPWithNoSync,
+						ServerUPWithNoSync,
+						ServerDownDueToMySQLConnection,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUPWithNoSync)
+
+					balancer = &Balancer{config: wsrepConfig, servers: []*Server{
+						ServerUPWithNoSync,
+						ServerUPWithNoSync,
+						ServerUPWithDelayAndHighThreadConnections,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUPWithDelayAndHighThreadConnections)
+
+					balancer = &Balancer{config: wsrepConfig, servers: []*Server{
+						ServerUPWithNoSync,
+						ServerUPWithNoSync,
+						ServerUPWithDelayAndHighThreadConnections,
+						ServerUP,
+					}}
+					So(balancer.PickServer(), ShouldPointTo, ServerUP)
+
 				})
 			})
 		})
@@ -311,6 +348,58 @@ func TestSortByConnection(t *testing.T) {
 		}
 
 		Convey("It should sort correctly", func() {
+			sort.Sort(byConnections(servers))
+			So(servers, ShouldHaveLength, 4)
+			So(servers[0].name, ShouldEqual, "server_4")
+			So(servers[1].name, ShouldEqual, "server_1")
+			So(servers[2].name, ShouldEqual, "server_2")
+			So(servers[3].name, ShouldEqual, "server_3")
+		})
+	})
+}
+
+func TestFilterByWriteSetStatus(t *testing.T) {
+	Convey("When a list of servers are given", t, func() {
+		servers := Servers{
+			{name: "server_1", health: &ServerHealth{
+				openConnections:    &[]int{3}[0],
+				runningConnections: &[]int{2}[0],
+				wsrepReady:         true,
+				ioRunning:          true,
+				wsrepLocalState:    &[]int{WriteSetStateSync}[0],
+			}},
+			{name: "server_2", health: &ServerHealth{
+				openConnections:    &[]int{3}[0],
+				runningConnections: nil,
+				wsrepReady:         true,
+				ioRunning:          true,
+				wsrepLocalState:    &[]int{WriteSetStateSync}[0],
+			}},
+			{name: "server_3", health: &ServerHealth{
+				openConnections:    nil,
+				runningConnections: nil,
+				wsrepReady:         true,
+				ioRunning:          true,
+				wsrepLocalState:    &[]int{WriteSetStateSync}[0],
+			}},
+			{name: "server_4", health: &ServerHealth{
+				openConnections:    &[]int{5}[0],
+				runningConnections: &[]int{0}[0],
+				wsrepReady:         true,
+				ioRunning:          true,
+				wsrepLocalState:    &[]int{WriteSetStateSync}[0],
+			}},
+			{name: "server_5", health: &ServerHealth{
+				openConnections:    &[]int{5}[0],
+				runningConnections: &[]int{0}[0],
+				wsrepReady:         true,
+				ioRunning:          true,
+				wsrepLocalState:    &[]int{2}[0],
+			}},
+		}
+
+		Convey("It should sort correctly", func() {
+			servers = servers.filterByWriteSetStatus()
 			sort.Sort(byConnections(servers))
 			So(servers, ShouldHaveLength, 4)
 			So(servers[0].name, ShouldEqual, "server_4")

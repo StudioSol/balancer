@@ -1,13 +1,13 @@
 export GO111MODULE=on
 
 all: deps build
-install: 
+install:
 	go install
-build: 
+build:
 	go build
-clean: 
+clean:
 	go clean
-deps: 
+deps:
 	go mod download
 test:
 	go test -race -cover ./...

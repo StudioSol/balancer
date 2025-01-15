@@ -1,4 +1,4 @@
-## MySQL Load Balancer 
+## MySQL Load Balancer
 
 [![Build Status](https://travis-ci.org/StudioSol/balancer.svg?branch=master)](https://travis-ci.org/StudioSol/balancer)
 [![codecov](https://codecov.io/gh/StudioSol/balancer/branch/master/graph/badge.svg)](https://codecov.io/gh/StudioSol/balancer)
@@ -30,6 +30,11 @@ func main() {
 
         // A balancer.Logger interface implementation
         Logger: log,
+
+        // ReplicationMode
+        // Use ReplicationModeSingleSource when slave status and seconds Behind Master is available
+        // Use ReplicationModeMultiSource when uses wsrep as multi master solution
+        ReplicationMode: balancer.ReplicationModeSingleSource,
 
 		// Slave servers' configuration
         ServersSettings: []balancer.ServerSettings{
