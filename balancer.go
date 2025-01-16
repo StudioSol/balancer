@@ -31,6 +31,7 @@ type byConnections Servers
 func (a byConnections) Len() int      { return len(a) }
 func (a byConnections) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a byConnections) Less(i, j int) bool {
+
 	if a[i].health.runningConnections == nil && a[j].health.runningConnections != nil {
 		return false
 	}
@@ -38,7 +39,8 @@ func (a byConnections) Less(i, j int) bool {
 		return true
 	}
 
-	if a[i].health.runningConnections == a[j].health.runningConnections {
+	if a[i].health.runningConnections == nil || a[j].health.runningConnections == nil ||
+		*a[i].health.runningConnections == *a[j].health.runningConnections {
 
 		if a[i].health.openConnections == nil && a[j].health.openConnections == nil {
 			return false
@@ -49,6 +51,7 @@ func (a byConnections) Less(i, j int) bool {
 		if a[i].health.openConnections != nil && a[j].health.openConnections == nil {
 			return true
 		}
+
 		return *a[i].health.openConnections < *a[j].health.openConnections
 
 	}
