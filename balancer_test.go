@@ -356,6 +356,35 @@ func TestSortByConnection(t *testing.T) {
 			So(servers[3].name, ShouldEqual, "server_3")
 		})
 	})
+	Convey("When a list of servers are given - by open cons", t, func() {
+		servers := Servers{
+			{name: "server_1", health: &ServerHealth{
+				openConnections:    &[]int{3}[0],
+				runningConnections: &[]int{2}[0],
+			}},
+			{name: "server_2", health: &ServerHealth{
+				openConnections:    &[]int{1}[0],
+				runningConnections: &[]int{2}[0],
+			}},
+			{name: "server_3", health: &ServerHealth{
+				openConnections:    &[]int{3}[0],
+				runningConnections: &[]int{2}[0],
+			}},
+			{name: "server_4", health: &ServerHealth{
+				openConnections:    &[]int{1005}[0],
+				runningConnections: &[]int{2}[0],
+			}},
+		}
+
+		Convey("It should sort correctly", func() {
+			sort.Sort(byConnections(servers))
+			So(servers, ShouldHaveLength, 4)
+			So(servers[0].name, ShouldEqual, "server_2")
+			So(servers[1].name, ShouldEqual, "server_1")
+			So(servers[2].name, ShouldEqual, "server_3")
+			So(servers[3].name, ShouldEqual, "server_4")
+		})
+	})
 }
 
 func TestFilterByWriteSetStatus(t *testing.T) {
