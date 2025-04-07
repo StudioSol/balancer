@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
-	"github.com/go-gorp/gorp"
+	"github.com/go-gorp/gorp/v3"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
