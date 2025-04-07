@@ -8,7 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/go-gorp/gorp"
+	"github.com/go-gorp/gorp/v3"
 )
 
 var mutex sync.Mutex
