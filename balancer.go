@@ -2,10 +2,9 @@ package balancer
 
 import (
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/StudioSol/balancer/concurrence"
 )
 
 type bySecondsBehindMaster Servers
@@ -62,10 +61,29 @@ func (a byConnections) Less(i, j int) bool {
 
 // Balancer MySQL load balancer
 type Balancer struct {
-	config  *Config
-	servers Servers
-	logger  Logger
-	traceOn bool
+	config      *Config
+	servers     Servers
+	logger      Logger
+	traceOn     bool
+	mut         sync.Mutex
+	stopChecker chan struct{} // signal for health check goroutine
+}
+
+func (b *Balancer) Close() {
+	b.mut.Lock()
+	defer b.mut.Unlock()
+
+	if b.stopChecker != nil {
+		close(b.stopChecker)
+		b.stopChecker = nil
+	}
+
+	for _, s := range b.servers {
+		if s != nil && s.connection != nil && s.connection.Db != nil {
+			s.connection.Db.Close()
+			s.connection = nil
+		}
+	}
 }
 
 // GetServers ...
@@ -179,10 +197,23 @@ func New(config *Config) *Balancer {
 
 	balancer.waitCheck()
 	if config.StartCheck {
-		concurrence.Every(time.Duration(config.CheckInterval)*time.Second, func(time.Time) bool {
-			balancer.check()
-			return true
-		})
+		if balancer.stopChecker != nil {
+			close(balancer.stopChecker)
+		}
+		balancer.stopChecker = make(chan struct{})
+
+		go func() {
+			ticker := time.NewTicker(time.Duration(config.CheckInterval) * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-balancer.stopChecker:
+					return
+				case <-ticker.C:
+					balancer.check()
+				}
+			}
+		}()
 	}
 
 	return balancer
