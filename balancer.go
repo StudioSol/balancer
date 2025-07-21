@@ -79,9 +79,16 @@ func (b *Balancer) Close() {
 	}
 
 	for _, s := range b.servers {
-		if s != nil && s.connection != nil && s.connection.Db != nil {
-			s.connection.Db.Close()
-			s.connection = nil
+		if s != nil {
+			if s.connection != nil && s.connection.Db != nil {
+				s.connection.Db.Close()
+				s.connection = nil
+			}
+
+			if s.replicationConnection != nil && s.replicationConnection.Db != nil {
+				s.replicationConnection.Db.Close()
+				s.replicationConnection = nil
+			}
 		}
 	}
 }
