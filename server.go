@@ -25,6 +25,18 @@ type Server struct {
 	replicationMode       ReplicationMode
 }
 
+func (s *Server) Close() {
+	if s.connection != nil && s.connection.Db != nil {
+		s.connection.Db.Close()
+		s.connection = nil
+	}
+
+	if s.replicationConnection != nil && s.replicationConnection.Db != nil {
+		s.replicationConnection.Db.Close()
+		s.replicationConnection = nil
+	}
+}
+
 // GetName returns server's name
 func (s *Server) GetName() string {
 	return s.name
