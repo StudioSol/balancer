@@ -22,9 +22,13 @@ type Server struct {
 	isChecking            int32
 	replicationMode       ReplicationMode
 	connLock              sync.Mutex
+	checkerLock           sync.Mutex
 }
 
 func (s *Server) Close() {
+	s.checkerLock.Lock()
+	defer s.checkerLock.Unlock()
+
 	s.connLock.Lock()
 	defer s.connLock.Unlock()
 
@@ -83,6 +87,9 @@ func (s *Server) connect(dsn string, traceOn bool, logger Logger) (*gorp.DbMap, 
 
 // CheckHealth check server's health and set it's state
 func (s *Server) CheckHealth(traceOn bool, logger Logger) {
+	s.checkerLock.Lock()
+	defer s.checkerLock.Unlock()
+
 	var secondsBehindMaster, openConnections, runningConnections, wsrepLocalState *int
 
 	// prevent concurrently checks on same server (slow queries/network)
