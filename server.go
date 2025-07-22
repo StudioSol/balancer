@@ -11,8 +11,6 @@ import (
 	"github.com/go-gorp/gorp/v3"
 )
 
-var mutex sync.Mutex
-
 // Server server representation
 type Server struct {
 	name                  string
@@ -23,9 +21,13 @@ type Server struct {
 	traceOn               bool
 	isChecking            int32
 	replicationMode       ReplicationMode
+	connLock              sync.Mutex
 }
 
 func (s *Server) Close() {
+	s.connLock.Lock()
+	defer s.connLock.Unlock()
+
 	if s.connection != nil && s.connection.Db != nil {
 		s.connection.Db.Close()
 		s.connection = nil
@@ -221,8 +223,8 @@ func (s *Server) CheckHealth(traceOn bool, logger Logger) {
 }
 
 func (s *Server) connectReadUser(traceOn bool, logger Logger) error {
-	mutex.Lock()
-	defer mutex.Unlock()
+	s.connLock.Lock()
+	defer s.connLock.Unlock()
 
 	if s.connection == nil {
 		conn, err := s.connect(s.serverSettings.DSN, traceOn, logger)
@@ -236,8 +238,8 @@ func (s *Server) connectReadUser(traceOn bool, logger Logger) error {
 }
 
 func (s *Server) connectReplicationUser(traceOn bool, logger Logger) error {
-	mutex.Lock()
-	defer mutex.Unlock()
+	s.connLock.Lock()
+	defer s.connLock.Unlock()
 
 	if s.replicationConnection == nil {
 		conn, err := s.connect(s.serverSettings.ReplicationDSN, traceOn, logger)
