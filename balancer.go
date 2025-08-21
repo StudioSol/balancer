@@ -65,13 +65,13 @@ type Balancer struct {
 	servers     Servers
 	logger      Logger
 	traceOn     bool
-	mut         sync.Mutex
+	checkerLock sync.Mutex    // prevent Balancer.Close and Balancer.check from running at the same time
 	stopChecker chan struct{} // signal for health check goroutine
 }
 
 func (b *Balancer) Close() {
-	b.mut.Lock()
-	defer b.mut.Unlock()
+	b.checkerLock.Lock()
+	defer b.checkerLock.Unlock()
 
 	if b.stopChecker != nil {
 		close(b.stopChecker)
@@ -102,6 +102,14 @@ func (b *Balancer) serversUP() Servers {
 }
 
 func (b *Balancer) check() {
+	b.checkerLock.Lock()
+	defer b.checkerLock.Unlock()
+
+	// Balancer already closed
+	if b.stopChecker == nil {
+		return
+	}
+
 	b.servers.eachASYNC(func(index int, server *Server) {
 		server.CheckHealth(b.traceOn, b.logger)
 	})
